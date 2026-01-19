@@ -1,14 +1,20 @@
-# YBS Build Artifacts
+# YBS Build Workspaces (temporary, NOT committed)
 builds/*/
 !builds/README.md
 
-# YBS Session Files (crash recovery)
+# YBS Session Files (crash recovery, in build directories)
 SESSION.md
 BUILD_STATUS.md
 BUILD_CONFIG.json
 
 # Scratch directory (temporary notes, session files)
 scratch/
+
+# Canonical implementations ARE committed (tracked)
+# (These are working reference implementations, not temp builds)
+!canonical/python/
+!canonical/swift/
+!canonical/test-vectors/
 
 # macOS
 .DS_Store
