@@ -1,0 +1,10 @@
+# YX Build Steps Execution Order
+
+# Step 0 must always be first
+ybs-step_000000000000.md
+
+# Additional steps will be added here as they are created
+# Format: one step file per line, in execution order
+# Example:
+# ybs-step_478a8c4b0cef.md
+# ybs-step_c5404152680d.md
