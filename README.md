@@ -15,12 +15,14 @@ YX provides a lightweight, secure transport layer for distributed systems:
 
 ## This is a YBS System
 
-This directory follows the YBS (Yelich Build System) structure:
+This directory follows the [YBS (Yelich Build System)](https://github.com/ScottYelich/ybs) structure:
 
 - `specs/` - Specifications defining WHAT YX is and does
 - `steps/` - Build steps defining HOW to implement YX
 - `builds/` - Build workspaces for different YX implementations
 - `docs/` - Additional documentation
+
+Learn more about YBS: https://github.com/ScottYelich/ybs
 
 ## Getting Started
 
