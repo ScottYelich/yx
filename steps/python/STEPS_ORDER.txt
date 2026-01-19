@@ -29,3 +29,18 @@ ybs-step_c4d5e6f7a2b3.md
 
 # Step 10: Generate Canonical Artifacts
 ybs-step_d5e6f7a2b3c4.md
+
+# Step 11: Protocol 0 (Text/JSON-RPC)
+ybs-step_g1h2i3j4k5l6.md
+
+# Step 12: Protocol 1 (Binary/Chunked)
+ybs-step_h2i3j4k5l6m7.md
+
+# Step 13: Security (Replay Protection + Rate Limiting)
+ybs-step_i3j4k5l6m7n8.md
+
+# Step 14: SimplePacketBuilder (Test Helpers)
+ybs-step_j4k5l6m7n8o9.md
+
+# Step 15: Interoperability Test Suite
+ybs-step_k5l6m7n8o9p0.md
