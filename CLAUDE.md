@@ -100,7 +100,9 @@ Build steps are organized by language:
 
 6. **Update status after each step**
 
-#### Running Interoperability Tests (Final)
+#### Running Interoperability Tests (Final) ⚠️ MANDATORY - CANNOT SKIP
+
+**Status:** ✅ MANDATORY - Build is NOT complete without passing all interop tests
 
 After both implementations are complete:
 
@@ -109,12 +111,34 @@ After both implementations are complete:
    cd tests/interop/
    ```
 
-2. **Run cross-language tests:**
-   - Python → Swift message exchange
-   - Swift → Python message exchange
-   - Verify wire format compatibility
+2. **Run ALL cross-language tests:**
+   ```bash
+   ./run_all_interop_tests.sh
+   ```
 
-3. **All interop tests MUST pass**
+3. **Required test matrix (N² tests for N languages):**
+   - Python → Python (actual UDP communication)
+   - Python → Swift (actual UDP communication)
+   - Swift → Python (actual UDP communication)
+   - Swift → Swift (actual UDP communication)
+
+4. **Each combination must test 5 scenarios:**
+   - Simple payload
+   - Empty payload
+   - Large payload (≥5KB)
+   - Multiple packets (≥10)
+   - Invalid key rejection
+
+5. **Total required: 2² × 5 = 20 tests**
+   - ALL 20 tests MUST pass
+   - No exceptions, no skipping
+   - Use real UDP sockets (not mocks)
+
+6. **Wire format compatibility is NOT sufficient:**
+   - ❌ Byte-identical packets in memory ≠ interoperability
+   - ✅ Must prove actual UDP network communication works
+
+**See:** `specs/testing/interoperability-requirements.md` for complete details
 
 ### 4. Build Completion Criteria
 
@@ -122,14 +146,21 @@ A single implementation is complete when:
 - All language-specific steps executed successfully
 - All verification criteria pass
 - BUILD_STATUS.md shows 100% complete
-- All tests pass
+- All unit tests pass (100%)
+- All integration tests pass (100%)
 - Traceability ≥80%
 
 The **entire YX system** is complete when:
-- Python implementation complete
-- Swift implementation complete
-- Canonical artifacts generated
-- All interop tests pass
+- ✅ Python implementation complete (Steps 0-10)
+- ✅ Swift implementation complete (Steps 0-10)
+- ✅ Canonical artifacts generated
+- ✅ **ALL interop tests pass (20/20 tests)** ⚠️ MANDATORY
+
+**CRITICAL:** The system is NOT complete until all 20 interop tests pass:
+- 4 combinations × 5 scenarios = 20 tests
+- Real UDP communication verified
+- No mocks, no assumptions
+- Cannot skip any tests
 
 ### 5. Important Rules
 
@@ -141,6 +172,11 @@ The **entire YX system** is complete when:
 - **Maintain traceability** - All code must reference specifications
 - **Update status files** - Keep BUILD_STATUS.md and SESSION.md current
 - **Validate canonical artifacts** - Swift implementation must pass all Python test vectors
+- **⚠️ INTEROP TESTS ARE MANDATORY** - Cannot skip, cannot assume compatibility
+  - Wire format compatibility ≠ network interoperability
+  - Must run all 20 tests (4 combinations × 5 scenarios)
+  - Real UDP sockets required (no mocks)
+  - Build is NOT complete without passing interop tests
 
 ## Directory Structure
 

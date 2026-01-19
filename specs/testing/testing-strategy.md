@@ -212,41 +212,66 @@ async def test_text_protocol_end_to_end():
     assert received_messages[0]["method"] == "test"
 ```
 
-#### Category 6: Interoperability Tests
+#### Category 6: Interoperability Tests ⚠️ MANDATORY
 
-**Purpose:** Test cross-language compatibility (if multiple implementations exist)
+**Status:** ✅ **MANDATORY** - CANNOT BE SKIPPED
+**Specification:** See `interoperability-requirements.md` for complete details
 
-**Required Test Coverage:**
-- Python → Swift message transmission
-- Swift → Python message transmission
-- Wire format validation (identical bytes for same message)
-- HMAC compatibility across implementations
-- Channel/sequence handling across implementations
+**Purpose:** Prove actual UDP network communication works between all language implementations
 
-**Implementation:**
-- Shell scripts that start services in different languages
-- Services exchange messages
-- Verify correct reception and parsing
+**CRITICAL REQUIREMENT:** Wire format compatibility is NOT sufficient. All implementations MUST demonstrate actual UDP packet exchange over the network.
 
-**Example from Reference:**
-```bash
-#!/bin/bash
-# test_python_swift_interop.sh
+**Required Test Matrix:**
+For N language implementations, N² tests are required:
+- Python → Python ✅ MANDATORY
+- Python → Swift ✅ MANDATORY
+- Swift → Python ✅ MANDATORY
+- Swift → Swift ✅ MANDATORY
 
-# Start Swift receiver
-swift run receiver &
-SWIFT_PID=$!
+**Required Test Scenarios (per combination):**
+1. Simple payload (ASCII text)
+2. Empty payload (zero bytes)
+3. Large payload (≥5KB)
+4. Multiple packets (≥10 sequential)
+5. Invalid key rejection
 
-sleep 1
-
-# Send from Python
-python3 sender.py
-
-# Check Swift received message
-# (implementation-specific verification)
-
-kill $SWIFT_PID
+**Total Tests Required:**
 ```
+For Python + Swift: 2² × 5 = 20 tests
+All 20 tests MUST pass - no exceptions
+```
+
+**Anti-Patterns (DO NOT DO):**
+- ❌ In-memory byte comparison (not real network)
+- ❌ Mock sockets (not real UDP)
+- ❌ Assuming wire format = network compatibility
+- ❌ Skipping any combination
+
+**Required Pattern:**
+```python
+# CORRECT - Real UDP communication
+def test_python_to_swift():
+    receiver = start_swift_receiver(port=7777)
+    time.sleep(1)
+    python_sender.send_udp(payload=b"test", host="127.0.0.1", port=7777)
+    received = receiver.wait_for_packet(timeout=5)
+    assert received.payload == b"test"
+```
+
+**Success Criteria:**
+- ✅ All N² × 5 tests pass
+- ✅ Real UDP sockets used
+- ✅ Actual network communication verified
+- ✅ HMAC validation passed
+- ✅ Payload matches expected
+
+**Failure Policy:**
+If ANY interop test fails:
+- ❌ Implementation is NOT complete
+- ❌ Cannot promote to canonical/
+- ❌ Cannot claim "production ready"
+
+**See Also:** `specs/testing/interoperability-requirements.md` for complete specification
 
 #### Category 7: Performance/Stress Tests (Optional but Recommended)
 
