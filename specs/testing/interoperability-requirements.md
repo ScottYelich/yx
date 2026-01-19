@@ -159,22 +159,29 @@ Each test MUST:
 
 Interoperability testing is **COMPLETE** when:
 
-✅ All N² test combinations pass
-✅ All 5 test scenarios pass for each combination
+✅ All N² test combinations pass (transport layer)
+✅ All N² protocol test combinations pass (text + binary)
+✅ All test scenarios pass for each combination
 ✅ Tests run reliably (no flaky failures)
 ✅ Single command runs all tests
 ✅ Clear pass/fail reporting
 
 **Completion Definition:**
 ```
-Total tests = N² × 5 scenarios
+Transport tests = N² × 5 scenarios
+Text protocol tests = N² × 3 scenarios
+Binary protocol tests = N² × 4 scenarios
+Total tests = N² × 12 scenarios
 Success = 100% pass rate
 ```
 
-For Python + Swift:
+For Python + Swift (N=2):
 ```
-Total tests = 2² × 5 = 20 tests
-Success = 20/20 passing
+Transport: 2² × 5 = 20 tests
+Text Protocol: 2² × 3 = 12 tests
+Binary Protocol: 2² × 4 = 16 tests
+Total tests = 48 tests
+Success = 48/48 passing
 ```
 
 ---
@@ -233,16 +240,58 @@ def test_interop():
 
 ---
 
+## Standalone Test Suite Requirement ⚠️ MANDATORY
+
+### Comprehensive Test Runner
+
+A **standalone, self-contained test suite** MUST be provided that:
+
+1. ✅ Runs with a single command (no setup, no configuration)
+2. ✅ Tests ALL N² language combinations
+3. ✅ Tests ALL 5 scenarios per combination
+4. ✅ Tests BOTH Protocol 0 (Text) and Protocol 1 (Binary)
+5. ✅ Reports clear pass/fail for each test
+6. ✅ Reports overall summary
+7. ✅ Exits with code 0 on success, non-zero on any failure
+8. ✅ Can be run in CI/CD pipelines
+9. ✅ Handles timeouts and cleanup automatically
+10. ✅ Logs detailed output for debugging failures
+
+**Single Command Requirement:**
+```bash
+./tests/interop/run_all_interop_tests.sh
+```
+
+**No Setup Required:**
+- Must not require manual process starting
+- Must not require configuration file editing
+- Must not require environment variables (except optional overrides)
+- Must handle port allocation automatically
+- Must clean up processes on exit (success or failure)
+
+**Output Requirement:**
+- Must show progress in real-time
+- Must report each test result immediately
+- Must provide summary at end
+- Must be parseable by CI/CD tools
+
+---
+
 ## Test Location
 
 All interoperability tests MUST be located in:
 ```
 tests/interop/
-├── test_python_to_python.py
-├── test_python_to_swift.py
-├── test_swift_to_python.py
-├── test_swift_to_swift.py
-└── run_all_interop_tests.sh
+├── transport/                      # UDP transport layer tests
+│   ├── test_python_to_python.py
+│   ├── test_python_to_swift.py
+│   ├── test_swift_to_python.py
+│   └── test_swift_to_swift.py
+├── protocol/                       # Protocol layer tests (NEW)
+│   ├── test_text_protocol.py      # Protocol 0 interop
+│   └── test_binary_protocol.py    # Protocol 1 interop
+├── run_all_interop_tests.sh       # Master test runner
+└── README.md                       # Test documentation
 ```
 
 Single command to run all tests:
@@ -253,6 +302,10 @@ Single command to run all tests:
 Expected output:
 ```
 Running YX Protocol Interoperability Tests...
+
+========================================
+PART 1: TRANSPORT LAYER TESTS (UDP + HMAC)
+========================================
 
 Test 1/4: Python → Python
   ✅ Simple payload: PASS
@@ -282,13 +335,158 @@ Test 4/4: Swift → Swift
   ✅ Multiple packets: PASS
   ✅ Invalid key rejection: PASS
 
+Transport Layer: 20/20 tests passed
+
 ========================================
-Total: 20 tests
-Passed: 20
-Failed: 0
+PART 2: PROTOCOL LAYER TESTS
+========================================
+
+Protocol 0 (Text Protocol) Tests:
+
+Test 1/4: Python → Python (Text)
+  ✅ JSON message: PASS
+  ✅ Large JSON (>5KB): PASS
+  ✅ Invalid JSON rejection: PASS
+
+Test 2/4: Python → Swift (Text)
+  ✅ JSON message: PASS
+  ✅ Large JSON (>5KB): PASS
+  ✅ Invalid JSON rejection: PASS
+
+Test 3/4: Swift → Python (Text)
+  ✅ JSON message: PASS
+  ✅ Large JSON (>5KB): PASS
+  ✅ Invalid JSON rejection: PASS
+
+Test 4/4: Swift → Swift (Text)
+  ✅ JSON message: PASS
+  ✅ Large JSON (>5KB): PASS
+  ✅ Invalid JSON rejection: PASS
+
+Text Protocol: 12/12 tests passed
+
+Protocol 1 (Binary Protocol) Tests:
+
+Test 1/4: Python → Python (Binary)
+  ✅ Binary message: PASS
+  ✅ Compressed message: PASS
+  ✅ Encrypted message: PASS
+  ✅ Compressed + encrypted: PASS
+
+Test 2/4: Python → Swift (Binary)
+  ✅ Binary message: PASS
+  ✅ Compressed message: PASS
+  ✅ Encrypted message: PASS
+  ✅ Compressed + encrypted: PASS
+
+Test 3/4: Swift → Python (Binary)
+  ✅ Binary message: PASS
+  ✅ Compressed message: PASS
+  ✅ Encrypted message: PASS
+  ✅ Compressed + encrypted: PASS
+
+Test 4/4: Swift → Swift (Binary)
+  ✅ Binary message: PASS
+  ✅ Compressed message: PASS
+  ✅ Encrypted message: PASS
+  ✅ Compressed + encrypted: PASS
+
+Binary Protocol: 16/16 tests passed
+
+========================================
+SUMMARY
+========================================
+Transport Layer:  20/20 passed ✅
+Text Protocol:    12/12 passed ✅
+Binary Protocol:  16/16 passed ✅
+----------------------------------------
+Total:            48/48 passed ✅
 ========================================
 ✅ ALL INTEROPERABILITY TESTS PASSED
+Exit code: 0
 ```
+
+---
+
+## Protocol Layer Testing Requirements ⚠️ MANDATORY
+
+In addition to transport layer tests (UDP + HMAC), ALL implementations MUST test protocol-level interoperability.
+
+### Protocol 0: Text Protocol Tests
+
+**Purpose:** Verify JSON message exchange works across implementations
+
+**Required Tests (per language combination):**
+1. **Simple JSON message** - Send/receive basic JSON object
+2. **Large JSON message** - Send/receive JSON ≥5KB
+3. **Invalid JSON rejection** - Receiver MUST reject malformed JSON
+
+**Verification:**
+- JSON parses correctly in receiver
+- All fields preserved (no data loss)
+- Types preserved (strings, numbers, booleans, nulls, arrays, objects)
+
+**Example Test:**
+```python
+def test_text_protocol_python_to_swift():
+    swift_receiver = start_swift_text_receiver(port=7777)
+    message = {"method": "test", "params": {"value": 42}}
+    python_sender.send_text(message, host="127.0.0.1", port=7777)
+    received = swift_receiver.wait_for_message(timeout=5)
+    assert received["method"] == "test"
+    assert received["params"]["value"] == 42
+```
+
+### Protocol 1: Binary Protocol Tests
+
+**Purpose:** Verify binary message exchange with compression/encryption works
+
+**Required Tests (per language combination):**
+1. **Binary message** - Send/receive raw binary data
+2. **Compressed message** - Send/receive ZLIB-compressed data
+3. **Encrypted message** - Send/receive AES-256-GCM encrypted data
+4. **Compressed + encrypted** - Send/receive data with both features
+
+**Verification:**
+- Binary data preserved exactly (byte-identical)
+- Compression/decompression works correctly
+- Encryption/decryption works correctly
+- Combined compression + encryption works correctly
+
+**Example Test:**
+```python
+def test_binary_protocol_swift_to_python():
+    python_receiver = start_python_binary_receiver(port=7778)
+    data = b'\x01\x02\x03\x04' * 1000  # 4KB binary data
+    swift_sender.send_binary(data, compressed=True, encrypted=True,
+                            host="127.0.0.1", port=7778)
+    received = python_receiver.wait_for_message(timeout=5)
+    assert received == data  # Must be byte-identical
+```
+
+### Test Count Calculation
+
+For N language implementations:
+
+**Transport Layer:**
+- N² combinations × 5 scenarios = N² × 5 tests
+
+**Text Protocol (Protocol 0):**
+- N² combinations × 3 scenarios = N² × 3 tests
+
+**Binary Protocol (Protocol 1):**
+- N² combinations × 4 scenarios = N² × 4 tests
+
+**Total:**
+- N² × (5 + 3 + 4) = N² × 12 tests
+
+**For Python + Swift (N=2):**
+- Transport: 4 × 5 = 20 tests
+- Text Protocol: 4 × 3 = 12 tests
+- Binary Protocol: 4 × 4 = 16 tests
+- **Total: 48 tests**
+
+**All 48 tests MUST pass for system to be considered complete.**
 
 ---
 
@@ -307,8 +505,10 @@ Each language implementation MUST include an interop testing step:
 **Step 11 Title:** "Cross-Language Interoperability Validation"
 
 **Step 11 Success Criteria:**
-- All N² × 5 tests pass
+- All N² × 12 tests pass (transport + text + binary protocols)
+- For Python + Swift: 48/48 tests pass
 - Clear reporting of which combinations tested
+- All 3 test layers pass (transport, text protocol, binary protocol)
 - No skipped tests
 - Exit code 0 on success
 

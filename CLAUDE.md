@@ -122,15 +122,16 @@ After both implementations are complete:
    - Swift → Python (actual UDP communication)
    - Swift → Swift (actual UDP communication)
 
-4. **Each combination must test 5 scenarios:**
-   - Simple payload
-   - Empty payload
-   - Large payload (≥5KB)
-   - Multiple packets (≥10)
-   - Invalid key rejection
+4. **Each combination must test 3 layers:**
+   - **Transport Layer** (5 scenarios): Simple, empty, large, multiple, invalid key
+   - **Protocol 0 (Text)** (3 scenarios): JSON, large JSON, invalid JSON
+   - **Protocol 1 (Binary)** (4 scenarios): Binary, compressed, encrypted, both
 
-5. **Total required: 2² × 5 = 20 tests**
-   - ALL 20 tests MUST pass
+5. **Total required: 2² × 12 = 48 tests**
+   - Transport: 20 tests
+   - Text Protocol: 12 tests
+   - Binary Protocol: 16 tests
+   - ALL 48 tests MUST pass
    - No exceptions, no skipping
    - Use real UDP sockets (not mocks)
 
@@ -154,10 +155,13 @@ The **entire YX system** is complete when:
 - ✅ Python implementation complete (Steps 0-10)
 - ✅ Swift implementation complete (Steps 0-10)
 - ✅ Canonical artifacts generated
-- ✅ **ALL interop tests pass (20/20 tests)** ⚠️ MANDATORY
+- ✅ **ALL interop tests pass (48/48 tests)** ⚠️ MANDATORY
 
-**CRITICAL:** The system is NOT complete until all 20 interop tests pass:
-- 4 combinations × 5 scenarios = 20 tests
+**CRITICAL:** The system is NOT complete until all 48 interop tests pass:
+- Transport Layer: 4 combinations × 5 scenarios = 20 tests
+- Text Protocol: 4 combinations × 3 scenarios = 12 tests
+- Binary Protocol: 4 combinations × 4 scenarios = 16 tests
+- **Total: 48 tests**
 - Real UDP communication verified
 - No mocks, no assumptions
 - Cannot skip any tests
@@ -174,8 +178,12 @@ The **entire YX system** is complete when:
 - **Validate canonical artifacts** - Swift implementation must pass all Python test vectors
 - **⚠️ INTEROP TESTS ARE MANDATORY** - Cannot skip, cannot assume compatibility
   - Wire format compatibility ≠ network interoperability
-  - Must run all 20 tests (4 combinations × 5 scenarios)
+  - Must run all 48 tests:
+    - Transport Layer: 20 tests (4 combinations × 5 scenarios)
+    - Text Protocol: 12 tests (4 combinations × 3 scenarios)
+    - Binary Protocol: 16 tests (4 combinations × 4 scenarios)
   - Real UDP sockets required (no mocks)
+  - Must test all protocol layers (transport, text, binary)
   - Build is NOT complete without passing interop tests
 
 ## Directory Structure
