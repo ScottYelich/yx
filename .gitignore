@@ -10,6 +10,9 @@ BUILD_CONFIG.json
 # Scratch directory (temporary notes, session files)
 scratch/
 
+# SDTS comparison directory (not part of repo)
+sdts-comparison/
+
 # Canonical implementations ARE committed (tracked)
 # (These are working reference implementations, not temp builds)
 !canonical/python/
