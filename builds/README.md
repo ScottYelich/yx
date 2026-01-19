@@ -6,11 +6,13 @@ This directory contains build workspaces for different YX implementations.
 
 Each build workspace is a complete implementation of YX in a specific language or configuration.
 
-Example builds:
-- `python-impl/` - Python implementation
-- `swift-impl/` - Swift implementation
-- `rust-impl/` - Rust implementation
-- `go-impl/` - Go implementation
+### Primary Implementations
+- `python-impl/` - Python implementation (reference, generates canonical artifacts)
+- `swift-impl/` - Swift implementation (validates against canonical artifacts)
+
+### Future Implementations
+- `rust-impl/` - Rust implementation (planned)
+- `go-impl/` - Go implementation (planned)
 
 ## Build Structure
 
@@ -34,6 +36,25 @@ build-name/
 4. AI executes Step 0 to create BUILD_CONFIG.json
 5. AI executes Steps 1-N autonomously
 
+## Build Order
+
+When building multiple implementations:
+
+1. **Python first** (`python-impl/`)
+   - Generates canonical test vectors → `../canonical/test-vectors/`
+   - Generates reference packets → `../canonical/reference-packets/`
+   - Generates benchmarks → `../canonical/benchmarks/`
+
+2. **Swift second** (`swift-impl/`)
+   - Validates against canonical test vectors
+   - Ensures wire format compatibility with Python
+   - Generates own benchmarks for comparison
+
+3. **Interop tests** (`../tests/interop/`)
+   - Run after both implementations complete
+   - Verify Python ↔ Swift message exchange
+   - Confirm identical packet generation
+
 ## Current Builds
 
-No builds created yet.
+No builds created yet. Builds will be created by executing Step 0 and following language-specific build steps.

@@ -18,8 +18,10 @@ YX provides a lightweight, secure transport layer for distributed systems:
 This directory follows the [YBS (Yelich Build System)](https://github.com/ScottYelich/ybs) structure:
 
 - `specs/` - Specifications defining WHAT YX is and does
-- `steps/` - Build steps defining HOW to implement YX
+- `steps/` - Build steps defining HOW to implement YX (organized by language)
 - `builds/` - Build workspaces for different YX implementations
+- `canonical/` - Shared reference artifacts for cross-implementation validation
+- `tests/` - System-level and interoperability tests
 - `docs/` - Additional documentation
 
 Learn more about YBS: https://github.com/ScottYelich/ybs
