@@ -26,20 +26,53 @@ This directory follows the [YBS (Yelich Build System)](https://github.com/ScottY
 
 Learn more about YBS: https://github.com/ScottYelich/ybs
 
+## Multi-Language Implementation
+
+YX is designed to have implementations in multiple languages with guaranteed wire format compatibility:
+
+### Primary Implementations
+- **Python** (`builds/python-impl/`) - Reference implementation, generates canonical test vectors
+- **Swift** (`builds/swift-impl/`) - High-performance implementation, validates against canonical test vectors
+
+### Build Order
+1. **Python first** - Generates canonical artifacts in `canonical/`
+2. **Swift second** - Validates against Python's canonical artifacts
+3. **Interop tests** - Verifies Python ↔ Swift communication (`tests/interop/`)
+
+All implementations must produce byte-identical packets for the same inputs.
+
 ## Getting Started
 
-To build YX using YBS:
+### Building Python Implementation
+```bash
+cd builds/python-impl/
+# AI agent executes steps/python/ sequence
+# Generates canonical artifacts to ../../canonical/
+```
 
-1. Read the specifications in `specs/`
-2. Review the build steps in `steps/`
-3. Execute Step 0 to configure your build
-4. Let the AI agent execute steps 1-N autonomously
+### Building Swift Implementation
+```bash
+cd builds/swift-impl/
+# AI agent executes steps/swift/ sequence
+# Validates against ../../canonical/ test vectors
+```
+
+### Running Interop Tests
+```bash
+cd tests/interop/
+./test-all-interop.sh
+```
 
 ## Current Status
 
-- **Specifications**: In progress
-- **Build Steps**: Not yet defined
-- **Builds**: None yet
+- ✅ Protocol specification complete (`specs/technical/yx-protocol-spec.md`)
+- ✅ Testing strategy defined (`specs/testing/testing-strategy.md`)
+- ✅ Language guidance documented (`specs/architecture/implementation-languages.md`)
+- ✅ Multi-language structure established (`canonical/`, `tests/interop/`, language-specific steps)
+- ⏳ Step 0 (Build Configuration) - Not yet created
+- ⏳ Python build steps - Not yet created
+- ⏳ Swift build steps - Not yet created
+- ⏳ No implementations built yet
 
 ## Reference Documentation
 
