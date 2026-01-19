@@ -3,13 +3,23 @@
 # Step 1: Project Setup
 ybs-step_a1b2c3d4e5f6.md
 
-# Additional steps to be created:
-# Step 2: GUID Factory (with tests)
-# Step 3: Packet Structure (with tests)
-# Step 4: HMAC Computation (CryptoKit, with tests)
-# Step 5: Packet Builder (with tests)
-# Step 6: Packet Parser (with tests)
-# Step 7: UDP Socket Setup (with tests)
-# Step 8: UDP Send/Receive (with tests)
+# Step 2: GUID Factory
+ybs-step_b2c3d4e5f6a1.md
+
+# Step 3: Packet Structure
+ybs-step_c3d4e5f6a1b2.md
+
+# Step 4: HMAC Computation (CryptoKit)
+ybs-step_d4e5f6a1b2c3.md
+
+# Step 5: Packet Builder
+ybs-step_e5f6a1b2c3d4.md
+
+# Step 6-8: UDP Socket and Send/Receive (Combined)
+ybs-step_f6a1b2c3d4e5.md
+
 # Step 9: Canonical Artifact Validation
+ybs-step_a2b3c4d5e6f7.md
+
 # Step 10: Integration Tests
+ybs-step_b3c4d5e6f7a2.md
