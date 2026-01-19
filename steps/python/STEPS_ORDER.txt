@@ -1,0 +1,21 @@
+# Python Implementation Build Steps Execution Order
+
+# Step 1: Project Setup
+ybs-step_a1b2c3d4e5f6.md
+
+# Step 2: GUID Factory
+ybs-step_b2c3d4e5f6a1.md
+
+# Step 3: Packet Structure
+ybs-step_c3d4e5f6a1b2.md
+
+# Step 4: HMAC Computation
+ybs-step_d4e5f6a1b2c3.md
+
+# Additional steps to be created:
+# Step 5: Packet Builder (build packet with HMAC)
+# Step 6: Packet Parser (parse and validate)
+# Step 7: UDP Socket Setup
+# Step 8: UDP Send/Receive
+# Step 9: Integration Tests
+# Step 10: Canonical Artifacts Generation

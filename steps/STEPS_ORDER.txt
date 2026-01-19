@@ -1,10 +1,16 @@
 # YX Build Steps Execution Order
 
-# Step 0 must always be first
+# Step 0 must always be first - Collects configuration and determines language
 ybs-step_000000000000.md
 
-# Additional steps will be added here as they are created
-# Format: one step file per line, in execution order
-# Example:
-# ybs-step_478a8c4b0cef.md
-# ybs-step_c5404152680d.md
+# After Step 0, execution continues based on selected language:
+#
+# If Python selected:
+#   Continue with steps in python/STEPS_ORDER.txt
+#
+# If Swift selected:
+#   Continue with steps in swift/STEPS_ORDER.txt
+#
+# If Both selected:
+#   Execute Python steps first (generates canonical artifacts)
+#   Then execute Swift steps (validates against canonical artifacts)
