@@ -1,19 +1,19 @@
 # Python Implementation Build Steps — Execution Order
 # Run from yx/ project root. Step 0 creates builds/<build_name>/
 
-000000 ybs-step_000000000000    # Step 0:  Build Configuration
-000001 ybs-step_a1b2c3d4e5f6    # Step 1:  Project Setup
-000002 ybs-step_b2c3d4e5f6a1    # Step 2:  GUID Factory
-000003 ybs-step_c3d4e5f6a1b2    # Step 3:  Packet Structure
-000004 ybs-step_d4e5f6a1b2c3    # Step 4:  HMAC Computation
-000005 ybs-step_e5f6a1b2c3d4    # Step 5:  Packet Builder
-000006 ybs-step_f6a1b2c3d4e5    # Step 6:  Packet Parser and Validator
-000007 ybs-step_a2b3c4d5e6f7    # Step 7:  UDP Socket Configuration
-000008 ybs-step_b3c4d5e6f7a2    # Step 8:  UDP Send and Receive
-000009 ybs-step_c4d5e6f7a2b3    # Step 9:  Integration Tests
-000010 ybs-step_d5e6f7a2b3c4    # Step 10: Generate Canonical Artifacts
-000011 ybs-step_g1h2i3j4k5l6    # Step 11: Protocol 0 (Text/JSON-RPC)
-000012 ybs-step_h2i3j4k5l6m7    # Step 12: Protocol 1 (Binary/Chunked)
-000013 ybs-step_i3j4k5l6m7n8    # Step 13: Security (Replay + Rate Limiting)
-000014 ybs-step_j4k5l6m7n8o9    # Step 14: SimplePacketBuilder
-000015 ybs-step_k5l6m7n8o9p0    # Step 15: Interoperability Tests
+000000 ybs-step_000000000000
+000001 ybs-step_a1b2c3d4e5f6
+000002 ybs-step_b2c3d4e5f6a1
+000003 ybs-step_c3d4e5f6a1b2
+000004 ybs-step_d4e5f6a1b2c3
+000005 ybs-step_e5f6a1b2c3d4
+000006 ybs-step_f6a1b2c3d4e5
+000007 ybs-step_a2b3c4d5e6f7
+000008 ybs-step_b3c4d5e6f7a2
+000009 ybs-step_c4d5e6f7a2b3
+000010 ybs-step_d5e6f7a2b3c4
+000011 ybs-step_g1h2i3j4k5l6
+000012 ybs-step_h2i3j4k5l6m7
+000013 ybs-step_i3j4k5l6m7n8
+000014 ybs-step_j4k5l6m7n8o9
+000015 ybs-step_k5l6m7n8o9p0

@@ -1,7 +1,7 @@
 """
 YX Primitives - Core data structures and utilities.
 
-Implements: specs/technical/yx-protocol-spec.md § Wire Format
+Implements: protocol/specs/technical/yx-protocol-spec.md § Wire Format
 """
 
 from .guid_factory import GUIDFactory
@@ -11,12 +11,6 @@ from .data_crypto import (
     compute_packet_hmac,
     validate_packet_hmac,
 )
-from .test_helpers import (
-    TestConfig,
-    SimplePacketBuilder,
-    send_udp_packet,
-    send_udp_packets,
-)
 
 __all__ = [
     "GUIDFactory",
@@ -24,8 +18,4 @@ __all__ = [
     "validate_hmac_constant_time",
     "compute_packet_hmac",
     "validate_packet_hmac",
-    "TestConfig",
-    "SimplePacketBuilder",
-    "send_udp_packet",
-    "send_udp_packets",
 ]
