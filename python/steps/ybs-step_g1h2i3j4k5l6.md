@@ -61,7 +61,7 @@ By the end of this step, you will have:
 Create these files:
 
 ```
-canonical/python/src/yx/
+{{CONFIG:impl_src}}/
 ├── transport/
 │   ├── protocol_router.py        # NEW: Routes by protocol ID
 │   └── text_protocol.py          # NEW: Protocol 0 handler
@@ -77,7 +77,7 @@ canonical/python/src/yx/
 
 ### Part 1: Protocol ID Enumeration
 
-**File:** `canonical/python/src/yx/transport/protocol_router.py`
+**File:** `{{CONFIG:impl_src}}/transport/protocol_router.py`
 
 ```python
 """
@@ -171,7 +171,7 @@ pytest src/yx/transport/test_protocol_router.py -v
 
 ### Part 2: JSON-RPC 2.0 Types
 
-**File:** `canonical/python/src/yx/rpc/__init__.py`
+**File:** `{{CONFIG:impl_src}}/rpc/__init__.py`
 
 ```python
 """
@@ -187,7 +187,7 @@ from .dispatcher import RPCDispatcher
 __all__ = ['RPCRequest', 'RPCResponse', 'RPCError', 'RPCDispatcher']
 ```
 
-**File:** `canonical/python/src/yx/rpc/json_rpc.py`
+**File:** `{{CONFIG:impl_src}}/rpc/json_rpc.py`
 
 ```python
 """
@@ -285,7 +285,7 @@ class RPCResponse:
 
 ### Part 3: RPC Dispatcher
 
-**File:** `canonical/python/src/yx/rpc/dispatcher.py`
+**File:** `{{CONFIG:impl_src}}/rpc/dispatcher.py`
 
 ```python
 """
@@ -351,7 +351,7 @@ class RPCDispatcher:
 
 ### Part 4: Protocol 0 Handler
 
-**File:** `canonical/python/src/yx/transport/text_protocol.py`
+**File:** `{{CONFIG:impl_src}}/transport/text_protocol.py`
 
 ```python
 """
@@ -484,7 +484,7 @@ class TextProtocol:
 
 ### Part 5: Integration Tests
 
-**File:** `canonical/python/src/yx/transport/test_protocol_router.py`
+**File:** `{{CONFIG:impl_src}}/transport/test_protocol_router.py`
 
 ```python
 """
@@ -534,7 +534,7 @@ async def test_protocol_router_empty_payload():
     await router.route(b"")
 ```
 
-**File:** `canonical/python/src/yx/transport/test_text_protocol.py`
+**File:** `{{CONFIG:impl_src}}/transport/test_text_protocol.py`
 
 ```python
 """
@@ -652,7 +652,7 @@ async def test_text_protocol_large_message():
     await handler.send(large_message, "127.0.0.1", 9999)
 ```
 
-**File:** `canonical/python/src/yx/rpc/test_json_rpc.py`
+**File:** `{{CONFIG:impl_src}}/rpc/test_json_rpc.py`
 
 ```python
 """

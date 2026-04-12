@@ -60,7 +60,7 @@ Swift v1.0.2 had `max_requests=100`, Python had `max_requests=10000`. High-frequ
 ## File Structure
 
 ```
-canonical/python/src/yx/
+{{CONFIG:impl_src}}/
 ├── transport/
 │   ├── replay_protection.py    # NEW: Replay protection
 │   ├── rate_limiter.py          # NEW: Rate limiting
@@ -76,7 +76,7 @@ canonical/python/src/yx/
 
 ### Part 1: Replay Protection
 
-**File:** `canonical/python/src/yx/transport/replay_protection.py`
+**File:** `{{CONFIG:impl_src}}/transport/replay_protection.py`
 
 ```python
 """
@@ -178,7 +178,7 @@ class ReplayProtection:
             logger.debug(f"Cleaned up {len(expired)} expired nonces")
 ```
 
-**Tests:** `canonical/python/src/yx/transport/test_replay_protection.py`
+**Tests:** `{{CONFIG:impl_src}}/transport/test_replay_protection.py`
 
 ```python
 """
@@ -258,7 +258,7 @@ def test_replay_protection_clear():
 
 ### Part 2: Rate Limiting
 
-**File:** `canonical/python/src/yx/transport/rate_limiter.py`
+**File:** `{{CONFIG:impl_src}}/transport/rate_limiter.py`
 
 ```python
 """
@@ -366,7 +366,7 @@ class RateLimiter:
             del self._request_history[peer_id]
 ```
 
-**Tests:** `canonical/python/src/yx/transport/test_rate_limiter.py`
+**Tests:** `{{CONFIG:impl_src}}/transport/test_rate_limiter.py`
 
 ```python
 """
@@ -463,7 +463,7 @@ def test_rate_limiter_default_is_10000():
 
 ### Part 3: Per-Peer Key Management
 
-**File:** `canonical/python/src/yx/transport/key_store.py`
+**File:** `{{CONFIG:impl_src}}/transport/key_store.py`
 
 ```python
 """
@@ -543,7 +543,7 @@ class KeyStore:
         return len(self._peer_keys)
 ```
 
-**Tests:** `canonical/python/src/yx/transport/test_key_store.py`
+**Tests:** `{{CONFIG:impl_src}}/transport/test_key_store.py`
 
 ```python
 """Tests for key store."""
@@ -618,7 +618,7 @@ def test_key_store_peer_count():
 
 ### Part 4: GUID Hex Utility
 
-**File:** `canonical/python/src/yx/primitives/guid_factory.py` (EXTEND existing file)
+**File:** `{{CONFIG:impl_src}}/primitives/guid_factory.py` (EXTEND existing file)
 
 Add this function to the existing file:
 

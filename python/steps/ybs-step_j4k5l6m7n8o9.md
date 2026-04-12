@@ -75,7 +75,7 @@ Test Receiver:
 ## File Structure
 
 ```
-canonical/python/src/yx/
+{{CONFIG:impl_src}}/
 └── primitives/
     └── test_helpers.py    # NEW: SimplePacketBuilder
 ```
@@ -84,7 +84,7 @@ canonical/python/src/yx/
 
 ## Implementation
 
-**File:** `canonical/python/src/yx/primitives/test_helpers.py`
+**File:** `{{CONFIG:impl_src}}/primitives/test_helpers.py`
 
 ```python
 """
@@ -330,7 +330,7 @@ def send_udp_packets(packets: List[bytes], host: str, port: int):
 
 ## Tests
 
-**File:** `canonical/python/src/yx/primitives/test_test_helpers.py`
+**File:** `{{CONFIG:impl_src}}/primitives/test_test_helpers.py`
 
 ```python
 """
@@ -516,7 +516,7 @@ def test_send_udp_packets_does_not_crash():
 
 ## Integration Test
 
-**File:** `canonical/python/src/yx/primitives/test_simple_packet_builder_integration.py`
+**File:** `{{CONFIG:impl_src}}/primitives/test_simple_packet_builder_integration.py`
 
 ```python
 """

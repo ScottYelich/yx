@@ -60,7 +60,7 @@ Implements the Protocol 1 (binary/chunked) handler — supporting optional zlib 
 ## File Structure
 
 ```
-canonical/python/src/yx/
+{{CONFIG:impl_src}}/
 ├── primitives/
 │   ├── data_compression.py    # NEW: ZLIB compression
 │   ├── data_crypto.py          # EXTEND: Add AES-256-GCM
@@ -75,7 +75,7 @@ canonical/python/src/yx/
 
 ### Part 1: Data Compression
 
-**File:** `canonical/python/src/yx/primitives/data_compression.py`
+**File:** `{{CONFIG:impl_src}}/primitives/data_compression.py`
 
 ```python
 """
@@ -132,7 +132,7 @@ def decompress_data(compressed: bytes) -> bytes:
         return zlib.decompress(compressed)
 ```
 
-**Tests:** `canonical/python/src/yx/primitives/test_data_compression.py`
+**Tests:** `{{CONFIG:impl_src}}/primitives/test_data_compression.py`
 
 ```python
 """Tests for data compression."""
@@ -174,7 +174,7 @@ def test_compress_empty_data():
 
 ### Part 2: AES-256-GCM Encryption
 
-**File:** `canonical/python/src/yx/primitives/data_crypto.py` (EXTEND existing file)
+**File:** `{{CONFIG:impl_src}}/primitives/data_crypto.py` (EXTEND existing file)
 
 Add these functions to the existing file:
 
@@ -249,7 +249,7 @@ def decrypt_aes_gcm(nonce: bytes, ciphertext_with_tag: bytes, key: bytes) -> byt
     return plaintext
 ```
 
-**Tests:** Add to `canonical/python/src/yx/primitives/test_data_crypto.py`
+**Tests:** Add to `{{CONFIG:impl_src}}/primitives/test_data_crypto.py`
 
 ```python
 def test_aes_gcm_encrypt_decrypt_roundtrip():
@@ -287,7 +287,7 @@ def test_aes_gcm_invalid_key_size():
 
 ### Part 3: Data Chunking
 
-**File:** `canonical/python/src/yx/primitives/data_chunking.py`
+**File:** `{{CONFIG:impl_src}}/primitives/data_chunking.py`
 
 ```python
 """
@@ -342,7 +342,7 @@ def unchunk_data(chunks: List[bytes]) -> bytes:
     return b"".join(chunks)
 ```
 
-**Tests:** `canonical/python/src/yx/primitives/test_data_chunking.py`
+**Tests:** `{{CONFIG:impl_src}}/primitives/test_data_chunking.py`
 
 ```python
 """Tests for data chunking."""
@@ -392,7 +392,7 @@ def test_chunk_exact_multiple():
 
 ### Part 4: Protocol 1 Binary Handler
 
-**File:** `canonical/python/src/yx/transport/binary_protocol.py`
+**File:** `{{CONFIG:impl_src}}/transport/binary_protocol.py`
 
 ```python
 """
@@ -686,7 +686,7 @@ class BinaryProtocol:
 
 ### Part 5: Tests
 
-**File:** `canonical/python/src/yx/transport/test_binary_protocol.py`
+**File:** `{{CONFIG:impl_src}}/transport/test_binary_protocol.py`
 
 ```python
 """
