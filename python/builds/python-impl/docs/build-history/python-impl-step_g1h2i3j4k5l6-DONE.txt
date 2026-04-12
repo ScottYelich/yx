@@ -1,0 +1,13 @@
+Step g1h2i3j4k5l6 (Protocol 0 - Text/JSON-RPC) - COMPLETED
+
+Files created:
+- src/yx/transport/protocol_router.py (murphy)
+- src/yx/rpc/__init__.py (murphy)
+- src/yx/rpc/json_rpc.py (murphy)
+- src/yx/rpc/dispatcher.py (murphy)
+- src/yx/transport/text_protocol.py (manual - murphy failed on final response)
+- src/yx/transport/test_protocol_router.py (manual)
+- src/yx/transport/test_text_protocol.py (manual)
+- src/yx/rpc/test_json_rpc.py (manual)
+
+Tests: 13/13 passed

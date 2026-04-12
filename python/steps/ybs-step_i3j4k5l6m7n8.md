@@ -644,15 +644,13 @@ def guid_to_hex(guid: bytes) -> str:
 ## Verification
 
 ```bash
-cd canonical/python
-
 # Run security tests
-pytest src/yx/transport/test_replay_protection.py -v
-pytest src/yx/transport/test_rate_limiter.py -v
-pytest src/yx/transport/test_key_store.py -v
+pytest {{CONFIG:impl_src}}/transport/test_replay_protection.py -v
+pytest {{CONFIG:impl_src}}/transport/test_rate_limiter.py -v
+pytest {{CONFIG:impl_src}}/transport/test_key_store.py -v
 
 # Verify all tests pass
-pytest src/yx/ -v --tb=short
+pytest {{CONFIG:impl_src}}/ -v --tb=short
 ```
 
 Expected: All tests passing, including security tests.

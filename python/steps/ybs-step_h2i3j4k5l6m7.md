@@ -891,16 +891,14 @@ async def test_binary_protocol_channel_isolation():
 ## Verification
 
 ```bash
-cd canonical/python
-
 # Run all Protocol 1 tests
-pytest src/yx/primitives/test_data_compression.py -v
-pytest src/yx/primitives/test_data_crypto.py::test_aes_gcm* -v
-pytest src/yx/primitives/test_data_chunking.py -v
-pytest src/yx/transport/test_binary_protocol.py -v
+pytest {{CONFIG:impl_src}}/primitives/test_data_compression.py -v
+pytest {{CONFIG:impl_src}}/primitives/test_data_crypto.py::test_aes_gcm* -v
+pytest {{CONFIG:impl_src}}/primitives/test_data_chunking.py -v
+pytest {{CONFIG:impl_src}}/transport/test_binary_protocol.py -v
 
 # Verify all pass
-pytest src/yx/ -v --tb=short
+pytest {{CONFIG:impl_src}}/ -v --tb=short
 ```
 
 ---

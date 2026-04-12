@@ -589,14 +589,12 @@ async def test_simple_packet_builder_integration():
 ## Verification
 
 ```bash
-cd canonical/python
-
 # Run test helper tests
-pytest src/yx/primitives/test_test_helpers.py -v
-pytest src/yx/primitives/test_simple_packet_builder_integration.py -v
+pytest {{CONFIG:impl_src}}/primitives/test_test_helpers.py -v
+pytest {{CONFIG:impl_src}}/primitives/test_simple_packet_builder_integration.py -v
 
 # Verify all tests pass
-pytest src/yx/ -v --tb=short
+pytest {{CONFIG:impl_src}}/ -v --tb=short
 ```
 
 ---

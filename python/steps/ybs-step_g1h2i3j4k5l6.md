@@ -163,8 +163,7 @@ class ProtocolRouter:
 
 **Verification:**
 ```bash
-cd canonical/python
-pytest src/yx/transport/test_protocol_router.py -v
+pytest {{CONFIG:impl_src}}/transport/test_protocol_router.py -v
 ```
 
 ---
@@ -760,15 +759,13 @@ def test_rpc_response_to_dict_error():
 ### Run All Tests
 
 ```bash
-cd canonical/python
-
 # Run Protocol 0 tests
-pytest src/yx/transport/test_protocol_router.py -v
-pytest src/yx/transport/test_text_protocol.py -v
-pytest src/yx/rpc/test_json_rpc.py -v
+pytest {{CONFIG:impl_src}}/transport/test_protocol_router.py -v
+pytest {{CONFIG:impl_src}}/transport/test_text_protocol.py -v
+pytest {{CONFIG:impl_src}}/rpc/test_json_rpc.py -v
 
 # Verify all tests pass
-pytest src/yx/ -v --tb=short
+pytest {{CONFIG:impl_src}}/ -v --tb=short
 ```
 
 ### Expected Output
