@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""
+Python YX transport sender.
+
+Usage:
+    python-sender <payload> <host> <port> [--key <hex32>]
+
+Outputs:
+    SENT: <payload>   on success
+    ERROR: <msg>      on failure
+
+Exit codes:
+    0  success
+    1  failure
+
+Traceability:
+- protocol/specs/testing/interoperability-requirements.md § Executable Requirements
+"""
+
+import sys
+import os
+
+# Add src/ to path so we can import yx
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src'))
+
+from yx.transport import PacketBuilder, UDPSocket
+from yx.primitives import GUIDFactory
+
+def main():
+    args = sys.argv[1:]
+    if len(args) < 3:
+        print("Usage: python-sender <payload> <host> <port> [--key <hex32>]")
+        sys.exit(1)
+
+    payload_str = args[0]
+    host = args[1]
+    port = int(args[2])
+
+    # Parse optional key
+    key = b'\x00' * 32  # default: 32 zero bytes
+    i = 3
+    while i < len(args):
+        if args[i] == '--key' and i + 1 < len(args):
+            key = bytes.fromhex(args[i + 1])
+            i += 2
+        else:
+            i += 1
+
+    payload = payload_str.encode('utf-8')
+    guid = GUIDFactory.generate()
+
+    sender = UDPSocket(port=0)
+    try:
+        sender.send_packet(guid=guid, payload=payload, key=key, host=host, port=port)
+        print(f"SENT: {payload_str}")
+        sys.exit(0)
+    except Exception as e:
+        print(f"ERROR: {e}")
+        sys.exit(1)
+    finally:
+        sender.close()
+
+if __name__ == '__main__':
+    main()

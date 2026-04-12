@@ -63,3 +63,24 @@ class PacketBuilder:
         """
         packet = PacketBuilder.build_packet(guid, payload, key)
         return packet.to_bytes()
+
+    @staticmethod
+    def parse_packet(data: bytes) -> Optional[Packet]:
+        """Parse packet from wire format (no HMAC validation)."""
+        return Packet.from_bytes(data)
+
+    @staticmethod
+    def validate_hmac(packet: Packet, key: bytes) -> bool:
+        """Validate packet HMAC."""
+        from ..primitives import validate_packet_hmac
+        return validate_packet_hmac(packet.guid, packet.payload, key, packet.hmac)
+
+    @staticmethod
+    def parse_and_validate(data: bytes, key: bytes) -> Optional[Packet]:
+        """Parse packet and validate HMAC. Returns Packet or None."""
+        packet = PacketBuilder.parse_packet(data)
+        if packet is None:
+            return None
+        if not PacketBuilder.validate_hmac(packet, key):
+            return None
+        return packet
