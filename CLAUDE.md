@@ -8,232 +8,277 @@
 
 ## Session Management
 
-**IMPORTANT:** At startup, check for session files in `scratch/`:
-- `scratch/SESSION.md` - Contains crash recovery state and context
+At startup, check for session files in `scratch/`:
+- `scratch/SESSION.md` — Contains crash recovery state and context
 - If found: Read and resume from saved state
 - If not found: Start fresh session
 
-All session files and temporary notes are kept in `scratch/` directory.
+All session files and temporary notes are kept in `scratch/`.
 
-## YBS Build Instructions
+---
 
-This is a YBS (Yelich Build System) managed system with **multi-language implementations**.
+## Three-System Structure
 
-### 1. Understand the System
+YX is organized as **three YBS systems** in one repository:
 
-Read the specifications in order:
-- `specs/technical/yx-protocol-spec.md` - Core protocol specification
-- `specs/testing/testing-strategy.md` - Testing requirements
-- `specs/architecture/implementation-languages.md` - Language guidance
+| System | Directory | What it is |
+|---|---|---|
+| **YX Protocol** | `protocol/` | Language-agnostic wire format specification |
+| **YX Python** | `python/` | Python reference implementation |
+| **YX Swift** | `swift/` | Swift high-performance implementation |
 
-### 2. Understand the Multi-Language Structure
+Plus shared cross-cutting directories:
+- `canonical/` — Promoted reference implementations and test vectors
+- `builds/` — Active build workspaces (created by Step 0)
+- `tests/interop/` — Cross-language interoperability tests
 
-YX supports multiple language implementations:
-- **Python** (`builds/python-impl/`) - Reference implementation, generates canonical artifacts
-- **Swift** (`builds/swift-impl/`) - High-performance implementation, validates against canonical artifacts
-- **Future** - Rust, Go, etc.
+---
 
-Build steps are organized by language:
-- `steps/ybs-step_000000000000.md` - Step 0 (language selection)
-- `steps/python/` - Python-specific build steps
-- `steps/swift/` - Swift-specific build steps
+## Understanding the Protocol Specs
 
-### 3. Build Workflow
+Before building any implementation, read the protocol specs:
 
-#### Building Python Implementation (First)
+```
+protocol/specs/
+├── technical/
+│   ├── _BASE.md                     ← Wire format invariants (read first)
+│   ├── yx-protocol-spec.md          ← Core protocol specification
+│   └── default-values.md            ← Cross-language default values
+├── architecture/
+│   ├── _BASE.md                     ← Design principles
+│   ├── ybs-decisions.md             ← Architecture Decision Records (D01-D07)
+│   ├── protocol-layers.md           ← Three-layer architecture
+│   ├── api-contracts.md             ← Language-agnostic API contracts
+│   └── security-architecture.md    ← Security model
+└── testing/
+    ├── _BASE.md                     ← Coverage standards
+    ├── testing-strategy.md          ← Test requirements
+    └── interoperability-requirements.md ← Mandatory 48-test matrix
+```
 
-1. **Navigate to build directory:**
-   ```bash
-   cd builds/python-impl/
-   ```
+---
+
+## Building the Python Implementation
+
+**Step files:** `python/steps/`
+**Step sequence:** `python/steps/STEPS_ORDER.txt`
+**Build output:** `builds/python-impl/` (or custom build name)
+**Implementation specs:** `python/specs/`
+
+### Workflow
+
+1. **Read specs first:**
+   - `protocol/specs/technical/yx-protocol-spec.md`
+   - `python/specs/technical/ybs-spec_3f7a9c2e1b4d.md`
+   - `python/specs/testing/ybs-spec_8b2d5e9f1a3c.md`
 
 2. **Check for crash recovery:**
-   - Look for `SESSION.md` in the build directory
-   - If found, resume from saved state
+   - Look for `builds/<build_name>/SESSION.md`
+   - If found, resume from last completed step
 
-3. **Execute Step 0 (Configuration):**
-   - Check if `BUILD_CONFIG.json` exists
-   - If exists: Load configuration, skip questions
-   - If not exists: Ask questions, create BUILD_CONFIG.json
-   - Select language: Python
+3. **Execute Step 0:** `python/steps/ybs-step_000000000000.md`
+   - Creates `builds/<build_name>/BUILD_CONFIG.json`, `BUILD_STATUS.md`, `SESSION.md`
+   - If `BUILD_CONFIG.json` already exists, skip questions and proceed
 
-4. **Execute Python Steps 1-N autonomously:**
-   - Read step files from `../../steps/python/` in order
-   - Replace all `{{CONFIG:key}}` placeholders with BUILD_CONFIG.json values
+4. **Execute Steps 1-15 autonomously** (no prompts between steps):
+   - Read each step file from `python/steps/` per STEPS_ORDER.txt
+   - Substitute all `{{CONFIG:key}}` placeholders with values from `BUILD_CONFIG.json`
    - Execute instructions
-   - Run verification
-   - Proceed automatically to next step (no prompts)
+   - Run verification (up to 3 attempts)
+   - Create DONE file in `builds/<build_name>/docs/build-history/`
+   - Update `BUILD_STATUS.md` and `SESSION.md`
+   - Proceed to next step
 
-5. **Generate Canonical Artifacts:**
-   - Final Python steps generate test vectors → `../../canonical/test-vectors/`
-   - Generate reference packets → `../../canonical/reference-packets/`
-   - Generate benchmarks → `../../canonical/benchmarks/`
+5. **Canonical Artifacts** (Step 10):
+   - Generates `canonical/test-vectors/` JSON files
+   - These are the ground truth for Swift validation
 
-6. **Update status after each step:**
-   - Update `BUILD_STATUS.md` with progress
-   - Update `SESSION.md` for crash recovery
-   - Create step-DONE file in `docs/build-history/`
+---
 
-#### Building Swift Implementation (Second)
+## Building the Swift Implementation
 
-1. **Ensure Python build is complete:**
-   - Python implementation must be built first
-   - Canonical artifacts must exist in `canonical/`
+**Prerequisite:** Python build complete, `canonical/test-vectors/` exists.
 
-2. **Navigate to build directory:**
-   ```bash
-   cd builds/swift-impl/
-   ```
+**Step files:** `swift/steps/`
+**Step sequence:** `swift/steps/STEPS_ORDER.txt`
+**Build output:** `builds/swift-impl/` (or custom build name)
+**Implementation specs:** `swift/specs/`
 
-3. **Execute Step 0 (Configuration):**
-   - Select language: Swift
-   - Create BUILD_CONFIG.json
+### Workflow
 
-4. **Execute Swift Steps 1-N autonomously:**
-   - Read step files from `../../steps/swift/` in order
-   - Follow same process as Python build
+1. **Read specs first:**
+   - `protocol/specs/technical/yx-protocol-spec.md`
+   - `swift/specs/technical/ybs-spec_6c4f2a8d1e7b.md`
+   - `swift/specs/testing/ybs-spec_9e1b3c6a4f2d.md`
 
-5. **Validate Against Canonical Artifacts:**
-   - Load test vectors from `../../canonical/test-vectors/`
-   - Verify Swift implementation produces identical results
-   - All canonical test vectors MUST pass
+2. **Execute Step 0:** `swift/steps/ybs-step_000000000000.md`
+   - Verifies `canonical/test-vectors/` exists (STOP if missing)
+   - Creates build workspace
 
-6. **Update status after each step**
+3. **Execute Steps 1-13 autonomously:**
+   - Follow the same autonomous execution pattern as Python
+   - Step 7 validates against canonical test vectors
 
-#### Running Interoperability Tests (Final) ⚠️ MANDATORY - CANNOT SKIP
+---
 
-**Status:** ✅ MANDATORY - Build is NOT complete without passing all interop tests
+## Running Interoperability Tests ⚠️ MANDATORY
 
-After both implementations are complete:
+**Status:** MANDATORY — Build is NOT complete without passing all 48 tests
 
-1. **Navigate to interop tests:**
-   ```bash
-   cd tests/interop/
-   ```
+After BOTH implementations are complete:
 
-2. **Run ALL cross-language tests:**
-   ```bash
-   ./run_all_interop_tests.sh
-   ```
+```bash
+cd tests/interop/
+./run_all_interop_tests.sh
+```
 
-3. **Required test matrix (N² tests for N languages):**
-   - Python → Python (actual UDP communication)
-   - Python → Swift (actual UDP communication)
-   - Swift → Python (actual UDP communication)
-   - Swift → Swift (actual UDP communication)
+### Required Test Matrix (48 tests total)
 
-4. **Each combination must test 3 layers:**
-   - **Transport Layer** (5 scenarios): Simple, empty, large, multiple, invalid key
-   - **Protocol 0 (Text)** (3 scenarios): JSON, large JSON, invalid JSON
-   - **Protocol 1 (Binary)** (4 scenarios): Binary, compressed, encrypted, both
+| Layer | Combinations | Scenarios | Tests |
+|---|---|---|---|
+| Transport | 4 (P→P, P→S, S→P, S→S) | 5 | 20 |
+| Protocol 0 (Text) | 4 | 3 | 12 |
+| Protocol 1 (Binary) | 4 | 4 | 16 |
+| **Total** | | | **48** |
 
-5. **Total required: 2² × 12 = 48 tests**
-   - Transport: 20 tests
-   - Text Protocol: 12 tests
-   - Binary Protocol: 16 tests
-   - ALL 48 tests MUST pass
-   - No exceptions, no skipping
-   - Use real UDP sockets (not mocks)
+- ALL 48 tests MUST pass — no exceptions
+- Use real UDP sockets (no mocks)
+- Wire format compatibility alone is NOT sufficient
 
-6. **Wire format compatibility is NOT sufficient:**
-   - ❌ Byte-identical packets in memory ≠ interoperability
-   - ✅ Must prove actual UDP network communication works
+**See:** `protocol/specs/testing/interoperability-requirements.md`
 
-**See:** `specs/testing/interoperability-requirements.md` for complete details
+---
 
-### 4. Build Completion Criteria
+## Build Completion Criteria
 
-A single implementation is complete when:
-- All language-specific steps executed successfully
-- All verification criteria pass
-- BUILD_STATUS.md shows 100% complete
-- All unit tests pass (100%)
-- All integration tests pass (100%)
+### Single Implementation Complete
+
+- All step verifications pass
+- `BUILD_STATUS.md` shows 100% complete
+- All unit tests pass
+- All integration tests pass
+- Code coverage ≥80% overall, 100% on critical paths
 - Traceability ≥80%
+- All canonical test vectors pass (Swift only)
+- DONE files exist for all steps
 
-The **entire YX system** is complete when:
-- ✅ Python implementation complete (Steps 0-10)
-- ✅ Swift implementation complete (Steps 0-10)
-- ✅ Canonical artifacts generated
-- ✅ **ALL interop tests pass (48/48 tests)** ⚠️ MANDATORY
+### Entire YX System Complete
 
-**CRITICAL:** The system is NOT complete until all 48 interop tests pass:
-- Transport Layer: 4 combinations × 5 scenarios = 20 tests
-- Text Protocol: 4 combinations × 3 scenarios = 12 tests
-- Binary Protocol: 4 combinations × 4 scenarios = 16 tests
-- **Total: 48 tests**
-- Real UDP communication verified
-- No mocks, no assumptions
-- Cannot skip any tests
+- ✅ Python implementation complete (Steps 0-15)
+- ✅ Canonical artifacts generated in `canonical/test-vectors/`
+- ✅ Swift implementation complete (Steps 0-13)
+- ✅ **ALL 48 interop tests pass** ⚠️ MANDATORY
 
-### 5. Important Rules
+---
 
-- **Always execute Step 0 first** - No exceptions
-- **Build Python before Swift** - Python generates canonical artifacts
-- **Never skip verification** - Run all verification checks
-- **Retry failed steps** - Up to 3 attempts per step
-- **Proceed autonomously** - No "ready for next step?" prompts
-- **Maintain traceability** - All code must reference specifications
-- **Update status files** - Keep BUILD_STATUS.md and SESSION.md current
-- **Validate canonical artifacts** - Swift implementation must pass all Python test vectors
-- **⚠️ INTEROP TESTS ARE MANDATORY** - Cannot skip, cannot assume compatibility
-  - Wire format compatibility ≠ network interoperability
-  - Must run all 48 tests:
-    - Transport Layer: 20 tests (4 combinations × 5 scenarios)
-    - Text Protocol: 12 tests (4 combinations × 3 scenarios)
-    - Binary Protocol: 16 tests (4 combinations × 4 scenarios)
-  - Real UDP sockets required (no mocks)
-  - Must test all protocol layers (transport, text, binary)
-  - Build is NOT complete without passing interop tests
+## Important Rules
+
+- **Execute Step 0 first** — No exceptions
+- **Build Python before Swift** — Python generates canonical artifacts
+- **Never skip verification** — Up to 3 attempts per step
+- **Proceed autonomously** — No "ready for next step?" prompts
+- **Maintain traceability** — All source files must reference protocol specs
+- **Update status files** — Keep `BUILD_STATUS.md` and `SESSION.md` current
+- **Create DONE files** — Every step creates a DONE file in `docs/build-history/`
+- **⚠️ Interop tests are mandatory** — Cannot skip, cannot assume compatibility
+
+---
 
 ## Directory Structure
 
 ```
 yx/
-├── specs/                       # WHAT to build (language-agnostic)
-│   ├── technical/               # Protocol specification
-│   ├── testing/                 # Testing requirements
-│   └── architecture/            # Design decisions
-├── steps/                       # HOW to build (language-specific)
-│   ├── ybs-step_000000000000.md # Step 0: Language selection
-│   ├── python/                  # Python build steps
-│   └── swift/                   # Swift build steps
-├── builds/                      # Build workspaces
-│   ├── python-impl/             # Python implementation
-│   └── swift-impl/              # Swift implementation
-├── canonical/                   # Shared reference artifacts
-│   ├── test-vectors/            # JSON test cases
-│   ├── reference-packets/       # Binary packets
-│   └── benchmarks/              # Performance baselines
-└── tests/                       # System-level tests
-    └── interop/                 # Cross-language tests
+├── CLAUDE.md
+│
+├── protocol/                    # System 1: YX Protocol (spec-only)
+│   ├── README.md
+│   └── specs/
+│       ├── technical/           # Wire format, default values
+│       │   ├── _BASE.md
+│       │   ├── yx-protocol-spec.md
+│       │   └── default-values.md
+│       ├── architecture/        # Design decisions, ADRs, API contracts
+│       │   ├── _BASE.md
+│       │   ├── ybs-decisions.md
+│       │   ├── protocol-layers.md
+│       │   ├── api-contracts.md
+│       │   ├── implementation-languages.md
+│       │   └── security-architecture.md
+│       └── testing/             # Test requirements, interop matrix
+│           ├── _BASE.md
+│           ├── testing-strategy.md
+│           └── interoperability-requirements.md
+│
+├── python/                      # System 2: Python Implementation
+│   ├── README.md
+│   ├── specs/                   # Python-specific implementation specs
+│   │   ├── technical/
+│   │   │   ├── _BASE.md
+│   │   │   └── ybs-spec_3f7a9c2e1b4d.md
+│   │   └── testing/
+│   │       ├── _BASE.md
+│   │       └── ybs-spec_8b2d5e9f1a3c.md
+│   └── steps/                   # YBS build steps (Steps 0-15)
+│       ├── STEPS_ORDER.txt
+│       ├── ybs-step_000000000000.md
+│       └── ybs-step_<guid>.md   (Steps 1-15)
+│
+├── swift/                       # System 3: Swift Implementation
+│   ├── README.md
+│   ├── specs/                   # Swift-specific implementation specs
+│   │   ├── technical/
+│   │   │   ├── _BASE.md
+│   │   │   └── ybs-spec_6c4f2a8d1e7b.md
+│   │   └── testing/
+│   │       ├── _BASE.md
+│   │       └── ybs-spec_9e1b3c6a4f2d.md
+│   └── steps/                   # YBS build steps (Steps 0-13)
+│       ├── STEPS_ORDER.txt
+│       ├── ybs-step_000000000000.md
+│       └── ybs-step_<guid>.md   (Steps 1-13)
+│
+├── builds/                      # Active build workspaces (created by Step 0)
+│   ├── python-impl/             # Python build output
+│   └── swift-impl/              # Swift build output
+│
+├── canonical/                   # Promoted reference implementations + artifacts
+│   ├── README.md
+│   ├── python/                  # Promoted from builds/python-impl/
+│   ├── swift/                   # Promoted from builds/swift-impl/
+│   └── test-vectors/            # Generated by Python, consumed by Swift
+│
+└── tests/
+    └── interop/                 # Cross-system interop tests (48-test matrix)
 ```
 
-## Path References
-
-- **YBS Framework:** `../ybs/` (reference documentation)
-- **AlgoTrader (example system):** `../sdts/scott/algotrader/`
-- **Current system:** `/Users/scottyelich/stuff/algotrader25/2025/yx/`
-
-## Current Status
-
-- ✅ YX protocol specification complete
-- ✅ Testing strategy defined
-- ✅ Multi-language structure established
-- ⏳ Step 0 needs to be created
-- ⏳ Python build steps need to be created
-- ⏳ Swift build steps need to be created
-- ⏳ No builds exist yet
+---
 
 ## Key Concepts
 
-### Canonical Artifacts
-Python implementation generates reference test vectors that Swift (and future implementations) must validate against. This ensures wire format compatibility across all languages.
+### Three-System Model
 
-### Build Order
-1. Python first → generates canonical artifacts
-2. Swift second → validates against canonical artifacts
-3. Interop tests → verifies cross-language communication
+1. **Protocol system** — defines what YX IS (wire format, security model). Spec-only.
+2. **Python system** — defines HOW to build YX in Python. Reference implementation.
+3. **Swift system** — defines HOW to build YX in Swift. Validates against Python.
 
-### Wire Format Compatibility
-All implementations MUST produce byte-identical packets for the same inputs. This is verified through canonical test vectors and interop tests.
+### Canonical Promotion Flow
+
+```
+python/steps/ → builds/python-impl/ → (verified) → canonical/python/
+swift/steps/  → builds/swift-impl/  → (verified) → canonical/swift/
+```
+
+### Path Conventions
+
+- Protocol specs are at `protocol/specs/` (project-root-relative)
+- Builds are at `builds/<name>/` (project-root-relative)
+- Canonical artifacts at `canonical/test-vectors/` (project-root-relative)
+- From a build directory (`builds/<name>/`): protocol specs are at `../../protocol/specs/`
+
+---
+
+## References
+
+- YBS Framework: `../ybs/`
+- Python canonical implementation: `canonical/python/`
+- Swift canonical implementation: `canonical/swift/`
