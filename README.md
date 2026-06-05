@@ -1,3 +1,5 @@
+> 🏠 Part of **[ScottYelich · portfolio](https://scottyelich.github.io/portfolio/)** — the public starting point for these projects. · 📄 **Web version:** open [`index.html`](index.html) in a browser.
+
 # YX System
 
 **YX** is a secure, payload-agnostic UDP-based networking protocol with HMAC integrity, optional encryption/compression, and chunked delivery for large messages.

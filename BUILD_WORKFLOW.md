@@ -27,7 +27,7 @@ yx/
 ### Step 1: Create Python Build Workspace
 
 ```bash
-cd /Users/scottyelich/stuff/algotrader25/2025/yx
+cd {{stuff}}/algotrader25/2025/yx
 
 # AI agent executes Step 0
 # This creates builds/python-impl/ with BUILD_CONFIG.json
@@ -301,7 +301,7 @@ Create `scripts/build-helper.sh`:
 # Helper script to drive YBS builds
 # This script INVOKES the AI agent for each step
 
-SYSTEM_DIR="/Users/scottyelich/stuff/algotrader25/2025/yx"
+SYSTEM_DIR="{{stuff}}/algotrader25/2025/yx"
 BUILD_NAME="$1"
 LANGUAGE="$2"
 

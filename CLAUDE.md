@@ -213,7 +213,7 @@ yx/
 
 - **YBS Framework:** `../ybs/` (reference documentation)
 - **AlgoTrader (example system):** `../sdts/scott/algotrader/`
-- **Current system:** `/Users/scottyelich/stuff/algotrader25/2025/yx/`
+- **Current system:** `{{stuff}}/algotrader25/2025/yx/`
 
 ## Current Status
 
@@ -237,3 +237,17 @@ Python implementation generates reference test vectors that Swift (and future im
 
 ### Wire Format Compatibility
 All implementations MUST produce byte-identical packets for the same inputs. This is verified through canonical test vectors and interop tests.
+
+
+## Conventions (portfolio-wide)
+
+This repo follows shared conventions documented in the **[portfolio](https://scottyelich.github.io/portfolio/)** (the public
+starting point for these projects, which links back here):
+
+- **Path references** use `{{name}}` brace placeholders — never hardcoded paths
+  (`/Users/...`, `~/workspace/...`) or assumed locations. `{{<repo>}}` denotes wherever that
+  repo is cloned; bind locally. (`${}` and parens are wrong — see the portfolio's NOTES.md.)
+- **README as a web page:** `index.html` is a self-contained, browser-loadable render of
+  `README.md`. Regenerate with the portfolio's `tools/mdpage.py`.
+- **Executive summary:** `docs/yx.md` — what this provides, strengths/weaknesses, and how
+  it relates to the sibling projects.
