@@ -64,6 +64,7 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
   header h1{margin:0;font-size:18px;font-weight:650}
   header p{margin:4px 0 0;color:var(--muted);font-size:13px}
   header .crumb a{color:#58a6ff;text-decoration:none}
+  header .hint{color:#7c6cf0}
   main{display:flex;height:calc(100% - 64px);min-height:520px}
   #chart{flex:1;min-width:0}
   aside{width:340px;flex:0 0 340px;border-left:1px solid var(--line);padding:16px 18px;overflow:auto}
@@ -79,6 +80,9 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
   .layers b{color:#fff}
   .layers .l-yx{background:rgba(88,166,255,.08)} .layers .l-mesh{background:rgba(124,108,240,.08)}
   .layers .l-flow{background:rgba(94,194,106,.08)} .layers .l-app{background:rgba(224,85,107,.07)}
+  button.reset{margin-top:10px;background:#161d27;color:var(--fg);border:1px solid var(--line);
+    border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer}
+  button.reset:hover{border-color:#7c6cf0;color:#fff}
   footer{padding:9px 20px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
   .pill{display:inline-block;background:#0b1f33;border:1px solid var(--line);border-radius:999px;
     padding:1px 9px;color:#9ecbff;font-size:12px}
@@ -90,7 +94,8 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
   <h1>SDTS / AlgoTrader — Network Topology &amp; Data Flow</h1>
   <p>A typed-node mesh over <b>YX</b>: every edge is a JSON-RPC message (Protocol&nbsp;0,
      UDP broadcast <span class="pill">255.255.255.255:50000</span>, HMAC-signed).
-     Toggle a lane in the legend; hover any node or edge for detail.</p>
+     <span class="hint">Drag any node to rearrange</span> · toggle a lane in the legend ·
+     hover for detail.</p>
 </header>
 <main>
   <div id="chart"></div>
@@ -102,6 +107,7 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
     <div class="key"><span class="dot" style="background:var(--proc)"></span>Processor (signal-algo, orchestrator)</div>
     <div class="key"><span class="dot" style="background:var(--state)"></span>State / observability</div>
     <div class="key"><span class="dot" style="background:var(--mgr)"></span>Manager (control plane)</div>
+    <button class="reset" id="reset">↺ Reset layout</button>
 
     <h2>How it operates</h2>
     <ol class="flow">
@@ -129,7 +135,7 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
 
 <script>
 const C = {ext:'#9aa4b2', gw:'#f2a154', data:'#5ec26a', proc:'#7c6cf0', state:'#2bb6c4', mgr:'#e0556b'};
-const N = {
+const HOME = {
   ib_gw:  {name:'IBKR Gateway / TWS', x:12,y:90, cat:'ext',  size:30, lang:'IB app (external)',
            role:'Interactive Brokers Gateway — the market-data & order-execution venue.', rpc:'IB TWS API on :4005'},
   ibkr_gw:{name:'ibkr-gateway', x:12,y:70, cat:'gw', size:30, lang:'Python',
@@ -153,58 +159,67 @@ const N = {
            role:'Control plane. Loads services.yaml; dependency-ordered start/stop/restart; ping-based health; reconciler / adopt.',
            rpc:'start · stop · restart · list · system.ping · health_check'},
 };
-const nodeData = Object.keys(N).map(k => {
-  const n = N[k];
-  return {name:n.name, value:[n.x,n.y], symbolSize:n.size, _meta:n,
-          itemStyle:{color:C[n.cat], borderColor:'#0d1117', borderWidth:2,
-                     shadowColor:C[n.cat], shadowBlur:14}};
-});
+// live (mutable) positions — start as a copy of HOME
+const N = {}; for(const k in HOME) N[k] = Object.assign({}, HOME[k]);
+const keys = Object.keys(N);
 
-function lane(name, color, edges, curveness, period){
+function nodeSeries(){
   return {
-    name, type:'lines', coordinateSystem:'cartesian2d', z:2, polyline:false,
-    effect:{show:true, period:period||5, trailLength:0.22, symbol:'arrow', symbolSize:8, color},
-    lineStyle:{color, width:1.4, opacity:0.34, curveness:curveness==null?0.2:curveness},
-    label:{show:true, formatter:p => p.data.name||'', color:'#aeb6c2', fontSize:10,
-           textBorderColor:'#0d1117', textBorderWidth:3},
-    emphasis:{focus:'series', lineStyle:{width:2.6, opacity:0.95}, label:{color:'#fff'}},
-    data: edges.map(e => ({name:e.m||'', coords:[[N[e.f].x,N[e.f].y],[N[e.t].x,N[e.t].y]]}))
+    name:'nodes', type:'scatter', coordinateSystem:'cartesian2d', z:5, cursor:'grab',
+    data: keys.map(k => { const n=N[k];
+      return {name:n.name, value:[n.x,n.y], symbolSize:n.size, _key:k, _meta:n,
+        itemStyle:{color:C[n.cat], borderColor:'#0d1117', borderWidth:2, shadowColor:C[n.cat], shadowBlur:14}}; }),
+    label:{show:true, position:'bottom', distance:7, color:'#c9d1d9', fontSize:11,
+      formatter:p=>p.data.name, textBorderColor:'#0d1117', textBorderWidth:3},
+    emphasis:{scale:1.15},
+    markArea:{ silent:true, z:0,
+      itemStyle:{color:'rgba(88,166,255,0.05)', borderColor:'rgba(88,166,255,0.22)', borderWidth:1},
+      label:{show:true, position:'insideTop', distance:6, color:'rgba(170,194,230,0.8)', fontSize:11,
+        formatter:'YX UDP bus · JSON-RPC (Protocol 0) · 255.255.255.255:50000 · HMAC-signed'},
+      data:[[{coord:[2,49]},{coord:[98,59]}]] }
   };
 }
-const flows = [
-  lane('IB API / lifecycle', C.ext, [
+
+const flowDefs = [
+  {name:'IB API / lifecycle', color:C.ext, curveness:0.15, period:6, edges:[
     {f:'ib_gw',  t:'bridge', m:'IB TWS API :4005'},
     {f:'bridge', t:'ib_gw',  m:'placeOrder / cancel'},
-    {f:'ibkr_gw',t:'ib_gw',  m:'launch / monitor'},
-  ], 0.15, 6),
-  lane('Market data', C.data, [
+    {f:'ibkr_gw',t:'ib_gw',  m:'launch / monitor'} ]},
+  {name:'Market data', color:C.data, curveness:0.18, period:3.5, edges:[
     {f:'bridge', t:'algo', m:'ib.tick'},
-    {f:'bridge', t:'mdl',  m:'ib.tick'},
-  ], 0.18, 3.5),
-  lane('Signal', C.proc, [
-    {f:'algo', t:'orch', m:'signal.order'},
-  ], 0.16, 4),
-  lane('Order', C.gw, [
-    {f:'orch', t:'bridge', m:'ib.place_bracket_order'},
-  ], -0.28, 4),
-  lane('Fills / events', '#e8c84a', [
+    {f:'bridge', t:'mdl',  m:'ib.tick'} ]},
+  {name:'Signal', color:C.proc, curveness:0.16, period:4, edges:[
+    {f:'algo', t:'orch', m:'signal.order'} ]},
+  {name:'Order', color:C.gw, curveness:-0.28, period:4, edges:[
+    {f:'orch', t:'bridge', m:'ib.place_bracket_order'} ]},
+  {name:'Fills / events', color:'#e8c84a', curveness:0.2, period:4.5, edges:[
     {f:'bridge', t:'orch',    m:'ib.orderStatus'},
     {f:'orch',   t:'tracker', m:'trade state'},
-    {f:'orch',   t:'evlog',   m:'trade.entryFilled'},
-  ], 0.2, 4.5),
-  lane('Control plane', C.mgr, [
+    {f:'orch',   t:'evlog',   m:'trade.entryFilled'} ]},
+  {name:'Control plane', color:C.mgr, curveness:0.12, period:7, edges:[
     {f:'mgr', t:'ibkr_gw', m:'start/stop · ping · health'},
     {f:'mgr', t:'bridge',  m:''},
     {f:'mgr', t:'algo',    m:''},
-    {f:'mgr', t:'orch',    m:''},
-  ], 0.12, 7),
+    {f:'mgr', t:'orch',    m:''} ]},
 ];
+function lane(d){
+  return {
+    name:d.name, type:'lines', coordinateSystem:'cartesian2d', z:2, polyline:false,
+    effect:{show:true, period:d.period||5, trailLength:0.22, symbol:'arrow', symbolSize:8, color:d.color},
+    lineStyle:{color:d.color, width:1.4, opacity:0.34, curveness:d.curveness==null?0.2:d.curveness},
+    label:{show:true, formatter:p=>p.data.name||'', color:'#aeb6c2', fontSize:10,
+      textBorderColor:'#0d1117', textBorderWidth:3},
+    emphasis:{focus:'series', lineStyle:{width:2.6, opacity:0.95}, label:{color:'#fff'}},
+    data: d.edges.map(e => ({name:e.m||'', coords:[[N[e.f].x,N[e.f].y],[N[e.t].x,N[e.t].y]]}))
+  };
+}
+const allSeries = () => [ nodeSeries(), ...flowDefs.map(lane) ];
 
 const chart = echarts.init(document.getElementById('chart'), null, {renderer:'canvas'});
 chart.setOption({
   backgroundColor:'transparent',
   legend:{ top:10, left:'center', textStyle:{color:'#c9d1d9'}, inactiveColor:'#444c56',
-    data: flows.map(f => f.name), icon:'roundRect' },
+    data: flowDefs.map(f => f.name), icon:'roundRect' },
   tooltip:{ trigger:'item', backgroundColor:'#0b1320', borderColor:'#21262d',
     textStyle:{color:'#e6edf3', fontSize:12}, extraCssText:'max-width:320px;white-space:normal;',
     formatter: p => {
@@ -217,18 +232,36 @@ chart.setOption({
   grid:{left:'2%', right:'2%', top:46, bottom:10},
   xAxis:{type:'value', min:0, max:100, show:false},
   yAxis:{type:'value', min:0, max:100, show:false},
-  series:[
-    { name:'nodes', type:'scatter', coordinateSystem:'cartesian2d', z:5, data:nodeData,
-      label:{show:true, position:'bottom', distance:7, color:'#c9d1d9', fontSize:11,
-             formatter:p=>p.data.name, textBorderColor:'#0d1117', textBorderWidth:3},
-      emphasis:{scale:1.15},
-      markArea:{ silent:true, z:0,
-        itemStyle:{color:'rgba(88,166,255,0.05)', borderColor:'rgba(88,166,255,0.22)', borderWidth:1},
-        label:{show:true, position:'insideTop', distance:6, color:'rgba(170,194,230,0.8)', fontSize:11,
-               formatter:'YX UDP bus · JSON-RPC (Protocol 0) · 255.255.255.255:50000 · HMAC-signed'},
-        data:[[{coord:[2,49]},{coord:[98,59]}]] } },
-    ...flows
-  ]
+  series: allSeries()
+});
+
+/* ---- drag: reposition a node and let its flow lines follow ---- */
+let dragKey = null, rafPending = false;
+chart.on('mousedown', p => {
+  if(p.seriesName === 'nodes' && p.data && p.data._key){
+    dragKey = p.data._key;
+    document.body.style.cursor = 'grabbing';
+    chart.dispatchAction({type:'hideTip'});
+  }
+});
+const zr = chart.getZr();
+zr.on('mousemove', e => {
+  if(!dragKey) return;
+  const pt = chart.convertFromPixel({xAxisIndex:0, yAxisIndex:0}, [e.offsetX, e.offsetY]);
+  if(!pt) return;
+  N[dragKey].x = Math.max(2, Math.min(98, pt[0]));
+  N[dragKey].y = Math.max(3, Math.min(97, pt[1]));
+  if(!rafPending){ rafPending = true;
+    requestAnimationFrame(() => { rafPending = false; chart.setOption({series: allSeries()}); }); }
+});
+function endDrag(){ if(dragKey){ dragKey = null; document.body.style.cursor = ''; } }
+zr.on('mouseup', endDrag);
+zr.on('globalout', endDrag);
+window.addEventListener('mouseup', endDrag);
+
+document.getElementById('reset').addEventListener('click', () => {
+  for(const k in HOME){ N[k].x = HOME[k].x; N[k].y = HOME[k].y; }
+  chart.setOption({series: allSeries()});
 });
 window.addEventListener('resize', () => chart.resize());
 </script>
