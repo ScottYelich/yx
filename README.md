@@ -33,8 +33,11 @@ Learn more about YBS: https://github.com/ScottYelich/ybs
 YX is designed to have implementations in multiple languages with guaranteed wire format compatibility:
 
 ### Primary Implementations
-- **Python** (`builds/python-impl/`) - Reference implementation, generates canonical test vectors
-- **Swift** (`builds/swift-impl/`) - High-performance implementation, validates against canonical test vectors
+- **Python** (`canonical/python/`) - Reference implementation, generates canonical test vectors
+- **Swift** (`canonical/swift/`) - High-performance implementation, validates against canonical test vectors
+
+(The YBS build is authored under `builds/{python,swift}-impl/` and *promoted* into
+`canonical/` — `canonical/` is the committed source of truth.)
 
 ### Build Order
 1. **Python first** - Generates canonical artifacts in `canonical/`
@@ -45,36 +48,34 @@ All implementations must produce byte-identical packets for the same inputs.
 
 ## Getting Started
 
-### Building Python Implementation
+### Python implementation
 ```bash
-cd builds/python-impl/
-# AI agent executes steps/python/ sequence
-# Generates canonical artifacts to ../../canonical/
+cd canonical/python && PYTHONPATH=src python3 -m pytest src/ tests/ -q
 ```
 
-### Building Swift Implementation
+### Swift implementation
 ```bash
-cd builds/swift-impl/
-# AI agent executes steps/swift/ sequence
-# Validates against ../../canonical/ test vectors
+cd canonical/swift && swift test
 ```
 
-### Running Interop Tests
+### Running interop tests (full 48-test matrix, real UDP)
 ```bash
-cd tests/interop/
-./test-all-interop.sh
+python3 tests/interop/run_matrix.py
 ```
 
 ## Current Status
 
 - ✅ Protocol specification complete (`specs/technical/yx-protocol-spec.md`)
 - ✅ Testing strategy defined (`specs/testing/testing-strategy.md`)
-- ✅ Language guidance documented (`specs/architecture/implementation-languages.md`)
-- ✅ Multi-language structure established (`canonical/`, `tests/interop/`, language-specific steps)
-- ⏳ Step 0 (Build Configuration) - Not yet created
-- ⏳ Python build steps - Not yet created
-- ⏳ Swift build steps - Not yet created
-- ⏳ No implementations built yet
+- ✅ Build steps authored (Steps 0–15 for both Python and Swift under `steps/`)
+- ✅ **Python implementation complete** (`canonical/python/`) — Transport, Protocol 0
+  (Text/JSON-RPC), Protocol 1 (Binary: compression / AES-256-GCM / chunking +
+  reassembly), security (replay protection + rate limiting); **148 unit tests pass**
+- ✅ **Swift implementation complete** (`canonical/swift/`) — same feature set;
+  **67 tests pass** (43 XCTest + 24 Swift Testing)
+- ✅ **Cross-language interoperability: 48/48 tests pass** over real UDP sockets
+  (Transport 20, Protocol 0 12, Protocol 1 16; Python↔Python, Python↔Swift,
+  Swift↔Python, Swift↔Swift) — run via `tests/interop/run_matrix.py`
 
 ## Reference Documentation
 

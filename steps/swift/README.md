@@ -36,7 +36,7 @@ Steps will be created in order:
 
 ## Target Build Directory
 
-`../../builds/swift-impl/`
+`../../canonical/swift/`
 
 ## Traceability
 

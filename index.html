@@ -8,7 +8,7 @@
 /*! EMBEDDED ASSET — readme.css
  * source:  https://github.com/ScottYelich/portfolio/blob/main/style/readme.css
  * version: 0.1.0
- * date:    2026-06-05T04:51:29Z
+ * date:    2026-06-05T06:47:02Z
  * sha256:  41f095c302ffb1167a8818917cda4b744459b3e6ef5a1dee1d1a37401f9b14b7
  * note:    inlined for self-containment; check source for updates.
  */
@@ -112,12 +112,16 @@ Implementation</h2>
 guaranteed wire format compatibility:</p>
 <h3 id="primary-implementations">Primary Implementations</h3>
 <ul>
-<li><strong>Python</strong> (<code>builds/python-impl/</code>) -
-Reference implementation, generates canonical test vectors</li>
-<li><strong>Swift</strong> (<code>builds/swift-impl/</code>) -
+<li><strong>Python</strong> (<code>canonical/python/</code>) - Reference
+implementation, generates canonical test vectors</li>
+<li><strong>Swift</strong> (<code>canonical/swift/</code>) -
 High-performance implementation, validates against canonical test
 vectors</li>
 </ul>
+<p>(The YBS build is authored under
+<code>builds/{python,swift}-impl/</code> and <em>promoted</em> into
+<code>canonical/</code> — <code>canonical/</code> is the committed
+source of truth.)</p>
 <h3 id="build-order">Build Order</h3>
 <ol type="1">
 <li><strong>Python first</strong> - Generates canonical artifacts in
@@ -130,36 +134,36 @@ communication (<code>tests/interop/</code>)</li>
 <p>All implementations must produce byte-identical packets for the same
 inputs.</p>
 <h2 id="getting-started">Getting Started</h2>
-<h3 id="building-python-implementation">Building Python
-Implementation</h3>
+<h3 id="python-implementation">Python implementation</h3>
 <div class="sourceCode" id="cb1"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> builds/python-impl/</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co"># AI agent executes steps/python/ sequence</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Generates canonical artifacts to ../../canonical/</span></span></code></pre></div>
-<h3 id="building-swift-implementation">Building Swift
-Implementation</h3>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> canonical/python <span class="kw">&amp;&amp;</span> <span class="va">PYTHONPATH</span><span class="op">=</span>src <span class="ex">python3</span> <span class="at">-m</span> pytest src/ tests/ <span class="at">-q</span></span></code></pre></div>
+<h3 id="swift-implementation">Swift implementation</h3>
 <div class="sourceCode" id="cb2"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> builds/swift-impl/</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># AI agent executes steps/swift/ sequence</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Validates against ../../canonical/ test vectors</span></span></code></pre></div>
-<h3 id="running-interop-tests">Running Interop Tests</h3>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> canonical/swift <span class="kw">&amp;&amp;</span> <span class="ex">swift</span> test</span></code></pre></div>
+<h3 id="running-interop-tests-full-48-test-matrix-real-udp">Running
+interop tests (full 48-test matrix, real UDP)</h3>
 <div class="sourceCode" id="cb3"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> tests/interop/</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./test-all-interop.sh</span></span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> tests/interop/run_matrix.py</span></code></pre></div>
 <h2 id="current-status">Current Status</h2>
 <ul>
 <li>✅ Protocol specification complete
 (<code>specs/technical/yx-protocol-spec.md</code>)</li>
 <li>✅ Testing strategy defined
 (<code>specs/testing/testing-strategy.md</code>)</li>
-<li>✅ Language guidance documented
-(<code>specs/architecture/implementation-languages.md</code>)</li>
-<li>✅ Multi-language structure established (<code>canonical/</code>,
-<code>tests/interop/</code>, language-specific steps)</li>
-<li>⏳ Step 0 (Build Configuration) - Not yet created</li>
-<li>⏳ Python build steps - Not yet created</li>
-<li>⏳ Swift build steps - Not yet created</li>
-<li>⏳ No implementations built yet</li>
+<li>✅ Build steps authored (Steps 0–15 for both Python and Swift under
+<code>steps/</code>)</li>
+<li>✅ <strong>Python implementation complete</strong>
+(<code>canonical/python/</code>) — Transport, Protocol 0
+(Text/JSON-RPC), Protocol 1 (Binary: compression / AES-256-GCM /
+chunking + reassembly), security (replay protection + rate limiting);
+<strong>148 unit tests pass</strong></li>
+<li>✅ <strong>Swift implementation complete</strong>
+(<code>canonical/swift/</code>) — same feature set; <strong>67 tests
+pass</strong> (43 XCTest + 24 Swift Testing)</li>
+<li>✅ <strong>Cross-language interoperability: 48/48 tests
+pass</strong> over real UDP sockets (Transport 20, Protocol 0 12,
+Protocol 1 16; Python↔︎Python, Python↔︎Swift, Swift↔︎Python, Swift↔︎Swift) —
+run via <code>tests/interop/run_matrix.py</code></li>
 </ul>
 <h2 id="reference-documentation">Reference Documentation</h2>
 <ul>
@@ -172,7 +176,7 @@ specification</li>
 </ul>
 
   </article>
-  <footer class="foot">Part of <a href="https://scottyelich.github.io/portfolio/">ScottYelich · portfolio</a> — the public starting point for these projects. Rendered 2026-06-05T04:51:29Z.</footer>
+  <footer class="foot">Part of <a href="https://scottyelich.github.io/portfolio/">ScottYelich · portfolio</a> — the public starting point for these projects. Rendered 2026-06-05T06:47:02Z.</footer>
 </div>
 </body>
 </html>

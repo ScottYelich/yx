@@ -4,6 +4,13 @@
 
 This document describes the practical workflow for building YX implementations using YBS, testing them, and promoting working code to canonical reference.
 
+> **Note (current state):** the committed implementations live in
+> `canonical/python/` and `canonical/swift/` and were built by applying the Steps
+> (1–15) directly into those trees. The `builds/{python,swift}-impl/` workspace +
+> promotion flow below is the *general* YBS methodology; `builds/` is gitignored and
+> not present in this checkout. To run/verify the current build, use the
+> `canonical/…` paths (and `tests/interop/run_matrix.py` for the 48-test matrix).
+
 ## Directory Structure Philosophy
 
 ```

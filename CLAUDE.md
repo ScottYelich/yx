@@ -29,8 +29,8 @@ Read the specifications in order:
 ### 2. Understand the Multi-Language Structure
 
 YX supports multiple language implementations:
-- **Python** (`builds/python-impl/`) - Reference implementation, generates canonical artifacts
-- **Swift** (`builds/swift-impl/`) - High-performance implementation, validates against canonical artifacts
+- **Python** (`canonical/python/`) - Reference implementation, generates canonical artifacts
+- **Swift** (`canonical/swift/`) - High-performance implementation, validates against canonical artifacts
 - **Future** - Rust, Go, etc.
 
 Build steps are organized by language:
@@ -44,7 +44,7 @@ Build steps are organized by language:
 
 1. **Navigate to build directory:**
    ```bash
-   cd builds/python-impl/
+   cd canonical/python/
    ```
 
 2. **Check for crash recovery:**
@@ -82,7 +82,7 @@ Build steps are organized by language:
 
 2. **Navigate to build directory:**
    ```bash
-   cd builds/swift-impl/
+   cd canonical/swift/
    ```
 
 3. **Execute Step 0 (Configuration):**
@@ -198,15 +198,15 @@ yx/
 │   ├── ybs-step_000000000000.md # Step 0: Language selection
 │   ├── python/                  # Python build steps
 │   └── swift/                   # Swift build steps
-├── builds/                      # Build workspaces
-│   ├── python-impl/             # Python implementation
-│   └── swift-impl/              # Swift implementation
-├── canonical/                   # Shared reference artifacts
-│   ├── test-vectors/            # JSON test cases
-│   ├── reference-packets/       # Binary packets
+├── builds/                      # Ephemeral YBS build workspaces (gitignored, not committed)
+├── canonical/                   # Committed reference implementations + artifacts
+│   ├── python/                  # Python implementation (reference)
+│   ├── swift/                   # Swift implementation
+│   ├── test-vectors/            # JSON test vectors
+│   ├── reference-packets/       # Raw reference packets (.bin)
 │   └── benchmarks/              # Performance baselines
 └── tests/                       # System-level tests
-    └── interop/                 # Cross-language tests
+    └── interop/                 # Cross-language tests (run_matrix.py)
 ```
 
 ## Path References
@@ -220,10 +220,15 @@ yx/
 - ✅ YX protocol specification complete
 - ✅ Testing strategy defined
 - ✅ Multi-language structure established
-- ⏳ Step 0 needs to be created
-- ⏳ Python build steps need to be created
-- ⏳ Swift build steps need to be created
-- ⏳ No builds exist yet
+- ✅ Build steps authored (Steps 0–15, Python and Swift, under `steps/`)
+- ✅ Python implementation complete (`canonical/python/`) — Transport, Protocol 0,
+  Protocol 1 (compression/AES-GCM/chunking+reassembly), security; 148 unit tests pass
+- ✅ Swift implementation complete (`canonical/swift/`) — same feature set; 67 tests pass
+- ✅ Cross-language interop: 48/48 over real UDP (`tests/interop/run_matrix.py`)
+
+> Note: implementation source lives in `canonical/{python,swift}/`. The
+> `builds/{python,swift}-impl/` paths in this guide refer to the ephemeral YBS build
+> workspace that is *promoted* into `canonical/`; the committed source is `canonical/`.
 
 ## Key Concepts
 

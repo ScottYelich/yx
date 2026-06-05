@@ -1,33 +1,30 @@
 import Foundation
 import YXProtocol
-import Network
-import CryptoKit
 
-// Get port from command line
+// Minimal demo receiver: bind, receive one YX packet, verify HMAC, print payload.
 guard CommandLine.arguments.count >= 2 else {
     print("Usage: swift-receiver <port>")
     exit(1)
 }
 
-let port = UInt16(CommandLine.arguments[1])!
-let keyData = Data(repeating: 0, count: 32)
-let key = SymmetricKey(data: keyData)
+let port = UInt16(CommandLine.arguments[1]) ?? TestConfig.testPort
+let key = TestConfig.testKey
 
 do {
-    let socket = UDPSocket(port: port)
-    try socket.bind()
+    let (packet, _, _) = try UDPHelper.receive(port: port, timeout: 3.0)
 
-    if let packet = try socket.receivePacket(key: key, timeout: 3.0) {
-        if let payload = String(data: packet.payload, encoding: .utf8) {
-            print("RECEIVED: \(payload)")
-        } else {
-            print("ERROR: Could not decode payload")
-            exit(1)
-        }
-    } else {
-        print("ERROR: No packet received")
+    guard SimplePacketBuilder.verifyPacket(packet: packet, key: key) else {
+        print("ERROR: Invalid HMAC")
         exit(1)
     }
+
+    if let payload = SimplePacketBuilder.extractPayload(packet: packet),
+       let text = String(data: payload, encoding: .utf8) {
+        print("RECEIVED: \(text)")
+    } else {
+        print("RECEIVED: \(packet.count) bytes")
+    }
+    exit(0)
 } catch {
     print("ERROR: \(error)")
     exit(1)

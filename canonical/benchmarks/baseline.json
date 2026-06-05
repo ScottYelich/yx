@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "note": "Baseline throughput on the generating machine; for regression tracking, not a pass/fail vector.",
+  "python": "3.13.1",
+  "metrics_ops_per_sec": {
+    "compute_packet_hmac (256B)": 644256,
+    "build_and_serialize (256B)": 512608,
+    "compress_data (1400B compressible)": 273209,
+    "encrypt_aes_gcm (256B)": 478891,
+    "chunk_data (4096B @1024)": 2873371
+  }
+}

@@ -92,3 +92,19 @@ class GUIDFactory:
             '010203040506'
         """
         return guid.hex()
+
+
+def guid_to_hex(guid: bytes) -> str:
+    """
+    Convert GUID to hex string (uppercase).
+
+    Args:
+        guid: 6-byte GUID
+
+    Returns:
+        Hex string (e.g., "E32E3CA702DE")
+
+    Traceability:
+    - specs/architecture/api-contracts.md (Type Conversion Utilities)
+    """
+    return guid.hex().upper()

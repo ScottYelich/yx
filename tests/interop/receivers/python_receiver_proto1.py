@@ -12,7 +12,7 @@ import sys
 import asyncio
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../builds/python-impl/src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../canonical/python/src'))
 
 from yx.transport.binary_protocol import BinaryProtocol
 from yx.transport.udp_socket import UDPSocket

@@ -4,18 +4,12 @@ This directory contains the **working reference implementation** of the YX proto
 
 ## Status
 
-⏳ **Not yet built**
+✅ **Complete** — Transport, Protocol 0 (Text/JSON-RPC), Protocol 1 (Binary:
+compression / AES-256-GCM / chunking + reassembly), and security (replay
+protection + rate limiting). 67 tests pass (`swift test`). Validates against the
+Python canonical test vectors and interoperates with Python over real UDP (48/48).
 
-This directory will be populated after:
-1. Python implementation is built and promoted to `canonical/python/`
-2. Building the Swift implementation in `builds/swift-impl/`
-3. Running all XCTests (100% pass)
-4. Validating against Python's canonical test vectors
-5. Promoting the working code here
-
-## What Will Be Here
-
-After promotion from `builds/swift-impl/`:
+## Layout
 
 ```
 canonical/swift/

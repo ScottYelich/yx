@@ -4,8 +4,11 @@ Data Cryptography Primitives - HMAC, AES-GCM, etc.
 Implements: specs/technical/yx-protocol-spec.md § Security Mechanisms
 """
 
+import os
 import hmac as hmac_module
+from typing import Tuple
 from cryptography.hazmat.primitives import hashes, hmac
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
 def compute_hmac(data: bytes, key: bytes, truncate_to: int = 16) -> bytes:
@@ -133,3 +136,61 @@ def validate_packet_hmac(
         return hmac_module.compare_digest(computed_hmac, expected_hmac)
     except (ValueError, TypeError):
         return False
+
+
+def encrypt_aes_gcm(plaintext: bytes, key: bytes) -> Tuple[bytes, bytes]:
+    """
+    Encrypt data using AES-256-GCM.
+
+    Args:
+        plaintext: Data to encrypt
+        key: 32-byte symmetric key
+
+    Returns:
+        (nonce, ciphertext_with_tag)
+            - nonce: 12 bytes (random)
+            - ciphertext_with_tag: encrypted data + 16-byte auth tag
+
+    Traceability:
+    - specs/architecture/security-architecture.md (Encryption Wire Format)
+    - specs/technical/yx-protocol-spec.md (AES-256-GCM Encryption)
+
+    Wire format: [nonce(12)] + [ciphertext] + [tag(16)]
+    """
+    if len(key) != 32:
+        raise ValueError("Key must be 32 bytes")
+
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)  # 96-bit random nonce
+    ciphertext_with_tag = aesgcm.encrypt(nonce, plaintext, None)
+
+    return nonce, ciphertext_with_tag
+
+
+def decrypt_aes_gcm(nonce: bytes, ciphertext_with_tag: bytes, key: bytes) -> bytes:
+    """
+    Decrypt AES-256-GCM encrypted data.
+
+    Args:
+        nonce: 12-byte nonce
+        ciphertext_with_tag: Encrypted data + 16-byte tag
+        key: 32-byte symmetric key
+
+    Returns:
+        Decrypted plaintext
+
+    Raises:
+        cryptography.exceptions.InvalidTag: If authentication fails
+
+    Traceability:
+    - specs/architecture/security-architecture.md (Decryption)
+    """
+    if len(key) != 32:
+        raise ValueError("Key must be 32 bytes")
+    if len(nonce) != 12:
+        raise ValueError("Nonce must be 12 bytes")
+
+    aesgcm = AESGCM(key)
+    plaintext = aesgcm.decrypt(nonce, ciphertext_with_tag, None)
+
+    return plaintext

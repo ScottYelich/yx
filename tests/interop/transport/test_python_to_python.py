@@ -12,7 +12,7 @@ import argparse
 import os
 import threading
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../builds/python-impl/src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../canonical/python/src'))
 
 from yx.transport.udp_socket import UDPSocket
 from yx.transport.packet_builder import PacketBuilder

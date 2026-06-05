@@ -11,7 +11,7 @@ Traceability:
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../builds/python-impl/src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../canonical/python/src'))
 
 from yx.primitives.test_helpers import (
     SimplePacketBuilder,

@@ -99,5 +99,5 @@ This reference implementation is ready for:
 ## Build System
 
 Built using YBS (Yelich Build System) - see `../../steps/python/` for build instructions.
-
-**Promoted from:** `builds/python-impl/` on 2026-01-18
+The build steps (1–15) are applied directly into this `canonical/python/` tree, which
+is the committed source of truth.

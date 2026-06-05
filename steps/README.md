@@ -67,7 +67,7 @@ Steps for building the Swift implementation of YX protocol.
 1. Execute Step 0 → Select "Python"
 2. Follow steps in python/
 3. Generate canonical artifacts to ../../canonical/
-4. Complete build in builds/python-impl/
+4. Complete build in canonical/python/
 ```
 
 ### Building Swift Implementation
@@ -75,7 +75,7 @@ Steps for building the Swift implementation of YX protocol.
 1. Execute Step 0 → Select "Swift"
 2. Follow steps in swift/
 3. Validate against canonical artifacts from ../../canonical/
-4. Complete build in builds/swift-impl/
+4. Complete build in canonical/swift/
 ```
 
 ### Building Both

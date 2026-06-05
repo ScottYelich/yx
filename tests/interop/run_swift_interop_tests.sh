@@ -24,12 +24,12 @@ FAILED=0
 FAILED_TESTS=()
 
 # Swift executable paths
-SWIFT_BUILD_DIR="swift/.build/debug"
+SWIFT_BUILD_DIR="swift-interop/.build/debug"
 
 # Ensure Swift executables are built
 if [ ! -d "$SWIFT_BUILD_DIR" ]; then
     echo "Building Swift interop programs..."
-    cd swift && swift build && cd ..
+    cd swift-interop && swift build && cd ..
 fi
 
 run_test() {

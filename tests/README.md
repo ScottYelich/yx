@@ -1,120 +1,49 @@
 # System-Level Tests
 
-This directory contains tests that span multiple YX implementations or require system-level validation.
+This directory contains tests that span multiple YX implementations.
 
-## Purpose
+The per-language unit/integration tests live with each implementation
+(`canonical/python/tests/`, `canonical/swift/Tests/`). This directory holds the
+**cross-language interoperability** suite.
 
-While each implementation (Python, Swift, etc.) has its own unit and integration tests in `builds/<impl>/tests/`, this directory contains tests that:
-- Validate cross-implementation compatibility
-- Test wire format consistency
-- Verify interoperability between languages
-- Perform system-level integration testing
+## interop/
 
-## Directory Structure
+Verifies that the Python (`canonical/python/`) and Swift (`canonical/swift/`)
+implementations actually communicate over real UDP sockets (no mocks).
 
-### interop/
-Cross-implementation interoperability tests
-
-**Purpose:** Verify that different language implementations can communicate
-
-**Contents:**
-- `test-python-to-swift.sh` - Python sender → Swift receiver
-- `test-swift-to-python.sh` - Swift sender → Python receiver
-- `test-python-to-python.sh` - Python sender → Python receiver (baseline)
-- `test-swift-to-swift.sh` - Swift sender → Swift receiver (baseline)
-- `test-all-interop.sh` - Run all interop tests
-- Helper scripts and test data
-
-**Test Flow Example:**
+### Run the full 48-test matrix
 ```bash
-#!/bin/bash
-# test-python-to-swift.sh
-
-echo "Starting Swift receiver..."
-cd ../../builds/swift-impl
-swift run receiver --port 50001 &
-RECEIVER_PID=$!
-
-sleep 1
-
-echo "Sending from Python..."
-cd ../../builds/python-impl
-python3 -m sender --port 50001 --message '{"method":"test","params":{}}'
-
-sleep 1
-
-echo "Verifying reception..."
-# Check logs, exit codes, etc.
-
-kill $RECEIVER_PID
+python3 tests/interop/run_matrix.py
+# or, which also (re)builds the Swift programs first:
+tests/interop/run_all_interop_tests.sh
 ```
 
-## Running Tests
+### What it covers (48 tests)
+
+| Layer | Scenarios | × Combos | Tests |
+|-------|-----------|----------|-------|
+| Transport (HMAC)            | simple, empty, large, multiple, invalid | 4 | 20 |
+| Protocol 0 (text/JSON-RPC)  | json, large, invalid                     | 4 | 12 |
+| Protocol 1 (binary/chunked) | base, compressed, encrypted, both        | 4 | 16 |
+
+Combinations: Python→Python, Python→Swift, Swift→Python, Swift→Swift.
+
+### Layout
+- `senders/`, `receivers/` — standalone Python sender/receiver programs.
+- `transport/`, `protocol0/`, `protocol1/` — Python↔Python scenario drivers.
+- `swift-interop/` — the Swift sender/receiver executables (SwiftPM package that
+  depends on `canonical/swift`).
+- `run_matrix.py` — the cross-language matrix driver.
 
 ### Prerequisites
-- Both Python and Swift implementations must be built
-- Implementations must be in `builds/python-impl/` and `builds/swift-impl/`
-- Canonical test vectors must exist in `canonical/test-vectors/`
-
-### Run All Interop Tests
-```bash
-cd tests/interop
-./test-all-interop.sh
-```
-
-### Run Individual Test
-```bash
-cd tests/interop
-./test-python-to-swift.sh
-```
-
-## Test Requirements
-
-Interop tests MUST verify:
-1. **Message delivery:** Receiver gets exact message sent
-2. **HMAC validation:** Packets pass HMAC check
-3. **Payload parsing:** JSON/binary payload parsed correctly
-4. **Round-trip:** Send → Receive → Process → Respond → Verify
-5. **Protocol support:** Both Text (Protocol 0) and Binary (Protocol 1)
-
-## Success Criteria
-
-All interop tests MUST:
-- Exit with code 0 (success)
-- Log successful message exchange
-- Verify HMAC validation passed
-- Verify payload matches expected
-- Complete within timeout (10 seconds default)
-
-## Failure Handling
-
-If interop test fails:
-1. Check implementation logs
-2. Verify canonical test vectors pass for each implementation individually
-3. Use packet capture (tcpdump) to inspect wire format
-4. Compare HMAC computation between implementations
-5. File issue with both implementations
-
-## Adding New Interop Tests
-
-When adding new test:
-
-1. Create test script in `tests/interop/`
-2. Follow naming convention: `test-<sender>-to-<receiver>.sh`
-3. Include in `test-all-interop.sh`
-4. Document test purpose in script header
-5. Commit test script
-
-## Performance Tests (Future)
-
-Future additions may include:
-- `performance/` - Cross-implementation performance comparison
-- `stress/` - High-load system tests
-- `latency/` - Round-trip latency measurements
+- Python 3 with the `cryptography` package (used by `canonical/python`).
+- A Swift toolchain (`swift build` works in `tests/interop/swift-interop/`).
+- Canonical artifacts in `canonical/test-vectors/` (the Swift unit tests validate
+  byte-for-byte against them).
 
 ## Notes
-
-- These tests run AFTER all implementations are built
-- Tests assume implementations are in standard build directories
-- Tests may require network access (localhost UDP)
-- Tests are part of CI/CD validation (after all builds pass)
+- "large" interop payloads are sized to the spec (~5–7 KB, single datagram) so they
+  fit under the macOS `net.inet.udp.maxdgram` cap (9216 bytes). Arbitrarily large
+  data is carried by Protocol 1 chunking (multi-packet, reassembled).
+- Tests require localhost UDP; they bind port 49999 by default (override with
+  `TEST_YX_PORT`).
