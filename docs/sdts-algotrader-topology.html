@@ -65,8 +65,21 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
   header p{margin:4px 0 0;color:var(--muted);font-size:13px}
   header .crumb a{color:#58a6ff;text-decoration:none}
   header .hint{color:#7c6cf0}
-  main{display:flex;height:calc(100% - 64px);min-height:520px}
-  #chart{flex:1;min-width:0}
+  .controls{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+  .controls button{background:#161d27;color:var(--fg);border:1px solid var(--line);border-radius:7px;
+    padding:6px 12px;font-size:12px;cursor:pointer}
+  .controls button:hover{border-color:#7c6cf0;color:#fff}
+  .controls button.on{border-color:#5ec26a;color:#fff;background:#13241a}
+  .controls button.run{border-color:#7c6cf0}
+  main{display:flex;height:calc(100% - 96px);min-height:480px}
+  #chart{flex:1;min-width:0;position:relative}
+  #status{position:absolute;left:14px;top:44px;z-index:6;display:flex;align-items:center;gap:9px;
+    background:rgba(13,17,23,.78);border:1px solid var(--line);border-radius:8px;padding:7px 13px;
+    font-size:13px;color:#e6edf3;max-width:62%;opacity:0;transform:translateY(-4px);
+    transition:opacity .25s,transform .25s;pointer-events:none}
+  #status.show{opacity:1;transform:none}
+  #status .sdot{width:10px;height:10px;border-radius:50%;flex:0 0 10px;background:#7c6cf0;
+    box-shadow:0 0 10px currentColor}
   aside{width:340px;flex:0 0 340px;border-left:1px solid var(--line);padding:16px 18px;overflow:auto}
   aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:18px 0 8px}
   aside h2:first-child{margin-top:0}
@@ -94,11 +107,18 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
   <h1>SDTS / AlgoTrader — Network Topology &amp; Data Flow</h1>
   <p>A typed-node mesh over <b>YX</b>: every edge is a JSON-RPC message (Protocol&nbsp;0,
      UDP broadcast <span class="pill">255.255.255.255:50000</span>, HMAC-signed).
-     <span class="hint">Drag any node to rearrange</span> · toggle a lane in the legend ·
-     hover for detail.</p>
+     <span class="hint">Drag any node to rearrange</span> (layout saved in this browser) ·
+     toggle a lane in the legend · hover for detail.</p>
+  <div class="controls">
+    <button id="btnAnim">❚❚ Pause flow</button>
+    <button id="btnRun" class="run">⚡ Run tick → trade</button>
+    <button id="btnAuto">▶ Auto</button>
+  </div>
 </header>
 <main>
-  <div id="chart"></div>
+  <div id="chart">
+    <div id="status"><span class="sdot"></span><span id="statusText"></span></div>
+  </div>
   <aside>
     <h2>Node types</h2>
     <div class="key"><span class="dot" style="background:var(--ext)"></span>External (IBKR Gateway/TWS)</div>
@@ -109,14 +129,15 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
     <div class="key"><span class="dot" style="background:var(--mgr)"></span>Manager (control plane)</div>
     <button class="reset" id="reset">↺ Reset layout</button>
 
-    <h2>How it operates</h2>
+    <h2>Tick → trade lifecycle</h2>
     <ol class="flow">
-      <li><b>Market data:</b> IBKR → <code>ib-bridge</code> (ib_async) → <code>ib.tick</code> → algos &amp; logger.</li>
+      <li><b>Tick:</b> IBKR → <code>ib-bridge</code> (ib_async) → <code>ib.tick</code> → algos &amp; logger.</li>
       <li><b>Signal:</b> algo → <code>signal.order</code> → orchestrator.</li>
       <li><b>Order:</b> orchestrator → <code>ib.place_bracket_order</code> → ib-bridge → IBKR.</li>
-      <li><b>Fills/events:</b> IBKR → <code>ib.orderStatus</code> → orchestrator → trade-tracker state machine → <code>trade.entryFilled</code> → logger.</li>
-      <li><b>Control plane:</b> ServiceManager does dependency-ordered start/stop, <code>system.ping</code> &amp; <code>health_check</code>.</li>
+      <li><b>Fill:</b> IBKR → <code>ib.orderStatus</code> → orchestrator → trade-tracker (<code>IN_TRADE</code>) → <code>trade.entryFilled</code>.</li>
+      <li><b>Result:</b> TP fill → <code>CLOSED</code> → <code>trade.takeProfitFilled</code> → logger.</li>
     </ol>
+    <p style="color:var(--muted);font-size:12px">Press <b>⚡ Run</b> to watch one event cascade hop-by-hop; <b>Auto</b> fires them at calm, random intervals.</p>
 
     <h2>Recommended layering (on YX)</h2>
     <div class="layers">
@@ -135,6 +156,7 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
 
 <script>
 const C = {ext:'#9aa4b2', gw:'#f2a154', data:'#5ec26a', proc:'#7c6cf0', state:'#2bb6c4', mgr:'#e0556b'};
+const EV = '#e8c84a';
 const HOME = {
   ib_gw:  {name:'IBKR Gateway / TWS', x:12,y:90, cat:'ext',  size:30, lang:'IB app (external)',
            role:'Interactive Brokers Gateway — the market-data & order-execution venue.', rpc:'IB TWS API on :4005'},
@@ -159,9 +181,16 @@ const HOME = {
            role:'Control plane. Loads services.yaml; dependency-ordered start/stop/restart; ping-based health; reconciler / adopt.',
            rpc:'start · stop · restart · list · system.ping · health_check'},
 };
-// live (mutable) positions — start as a copy of HOME
 const N = {}; for(const k in HOME) N[k] = Object.assign({}, HOME[k]);
 const keys = Object.keys(N);
+
+const LS='yx-topo-layout-v1';
+function saveLayout(){const o={};for(const k in N)o[k]=[N[k].x,N[k].y];try{localStorage.setItem(LS,JSON.stringify(o));}catch(e){}}
+function loadLayout(){try{const o=JSON.parse(localStorage.getItem(LS)||'null');if(o)for(const k in o)if(N[k]){N[k].x=o[k][0];N[k].y=o[k][1];}}catch(e){}}
+loadLayout();
+
+let animOn = true;       // ambient flow particles on/off
+let pulseEdge = null;    // current lifecycle pulse {f,t,color,cv}
 
 function nodeSeries(){
   return {
@@ -171,12 +200,7 @@ function nodeSeries(){
         itemStyle:{color:C[n.cat], borderColor:'#0d1117', borderWidth:2, shadowColor:C[n.cat], shadowBlur:14}}; }),
     label:{show:true, position:'bottom', distance:7, color:'#c9d1d9', fontSize:11,
       formatter:p=>p.data.name, textBorderColor:'#0d1117', textBorderWidth:3},
-    emphasis:{scale:1.15},
-    markArea:{ silent:true, z:0,
-      itemStyle:{color:'rgba(88,166,255,0.05)', borderColor:'rgba(88,166,255,0.22)', borderWidth:1},
-      label:{show:true, position:'insideTop', distance:6, color:'rgba(170,194,230,0.8)', fontSize:11,
-        formatter:'YX UDP bus · JSON-RPC (Protocol 0) · 255.255.255.255:50000 · HMAC-signed'},
-      data:[[{coord:[2,49]},{coord:[98,59]}]] }
+    emphasis:{scale:1.25, itemStyle:{shadowBlur:26}}
   };
 }
 
@@ -192,7 +216,7 @@ const flowDefs = [
     {f:'algo', t:'orch', m:'signal.order'} ]},
   {name:'Order', color:C.gw, curveness:-0.28, period:4, edges:[
     {f:'orch', t:'bridge', m:'ib.place_bracket_order'} ]},
-  {name:'Fills / events', color:'#e8c84a', curveness:0.2, period:4.5, edges:[
+  {name:'Fills / events', color:EV, curveness:0.2, period:4.5, edges:[
     {f:'bridge', t:'orch',    m:'ib.orderStatus'},
     {f:'orch',   t:'tracker', m:'trade state'},
     {f:'orch',   t:'evlog',   m:'trade.entryFilled'} ]},
@@ -205,7 +229,7 @@ const flowDefs = [
 function lane(d){
   return {
     name:d.name, type:'lines', coordinateSystem:'cartesian2d', z:2, polyline:false,
-    effect:{show:true, period:d.period||5, trailLength:0.22, symbol:'arrow', symbolSize:8, color:d.color},
+    effect:{show:animOn, period:d.period||5, trailLength:0.22, symbol:'arrow', symbolSize:8, color:d.color},
     lineStyle:{color:d.color, width:1.4, opacity:0.34, curveness:d.curveness==null?0.2:d.curveness},
     label:{show:true, formatter:p=>p.data.name||'', color:'#aeb6c2', fontSize:10,
       textBorderColor:'#0d1117', textBorderWidth:3},
@@ -213,7 +237,19 @@ function lane(d){
     data: d.edges.map(e => ({name:e.m||'', coords:[[N[e.f].x,N[e.f].y],[N[e.t].x,N[e.t].y]]}))
   };
 }
-const allSeries = () => [ nodeSeries(), ...flowDefs.map(lane) ];
+function pulseSeries(){
+  const e = pulseEdge;
+  return {
+    name:'pulse', type:'lines', coordinateSystem:'cartesian2d', z:7, silent:true,
+    effect:{show:true, period:0.95, trailLength:0.0, symbol:'circle', symbolSize:14, color:'#ffffff'},
+    lineStyle:{color: e?e.color:'#fff', width: e?3:0, opacity: e?0.9:0, curveness: e?(e.cv==null?0.2:e.cv):0,
+      shadowColor: e?e.color:'#fff', shadowBlur: e?12:0},
+    data: e ? [{coords:[[N[e.f].x,N[e.f].y],[N[e.t].x,N[e.t].y]]}] : []
+  };
+}
+const NSER = 1 + flowDefs.length;                 // index of the pulse series
+const allSeries = () => [ nodeSeries(), ...flowDefs.map(lane), pulseSeries() ];
+function setPulse(){ const arr = Array(NSER).fill({}); arr.push(pulseSeries()); chart.setOption({series:arr}); }
 
 const chart = echarts.init(document.getElementById('chart'), null, {renderer:'canvas'});
 chart.setOption({
@@ -226,6 +262,7 @@ chart.setOption({
       if(p.seriesType==='scatter'){ const m=p.data._meta;
         return `<b>${m.name}</b> &nbsp;<span style="color:#8b949e">${m.lang}</span><br/>`
              + `${m.role}<br/><span style="color:#9ecbff">RPC: ${m.rpc}</span>`; }
+      if(p.seriesName==='pulse') return '';
       return `<b>${p.data.name||'(broadcast)'}</b><br/>`
            + `<span style="color:#8b949e">${p.seriesName} · YX JSON-RPC (Protocol 0, UDP :50000)</span>`;
     }},
@@ -235,13 +272,11 @@ chart.setOption({
   series: allSeries()
 });
 
-/* ---- drag: reposition a node and let its flow lines follow ---- */
+/* ---- drag: reposition a node; flow + pulse lines follow ---- */
 let dragKey = null, rafPending = false;
 chart.on('mousedown', p => {
   if(p.seriesName === 'nodes' && p.data && p.data._key){
-    dragKey = p.data._key;
-    document.body.style.cursor = 'grabbing';
-    chart.dispatchAction({type:'hideTip'});
+    dragKey = p.data._key; document.body.style.cursor='grabbing'; chart.dispatchAction({type:'hideTip'});
   }
 });
 const zr = chart.getZr();
@@ -254,15 +289,88 @@ zr.on('mousemove', e => {
   if(!rafPending){ rafPending = true;
     requestAnimationFrame(() => { rafPending = false; chart.setOption({series: allSeries()}); }); }
 });
-function endDrag(){ if(dragKey){ dragKey = null; document.body.style.cursor = ''; } }
-zr.on('mouseup', endDrag);
-zr.on('globalout', endDrag);
-window.addEventListener('mouseup', endDrag);
+function endDrag(){ if(dragKey){ dragKey = null; document.body.style.cursor=''; saveLayout(); } }
+zr.on('mouseup', endDrag); zr.on('globalout', endDrag); window.addEventListener('mouseup', endDrag);
 
 document.getElementById('reset').addEventListener('click', () => {
+  try{ localStorage.removeItem(LS); }catch(e){}
   for(const k in HOME){ N[k].x = HOME[k].x; N[k].y = HOME[k].y; }
   chart.setOption({series: allSeries()});
 });
+
+/* ---- pause / resume ambient flow ---- */
+const btnAnim = document.getElementById('btnAnim');
+btnAnim.addEventListener('click', () => {
+  animOn = !animOn;
+  chart.setOption({series: allSeries()});
+  btnAnim.textContent = animOn ? '❚❚ Pause flow' : '▶ Resume flow';
+  btnAnim.classList.toggle('on', !animOn);
+});
+
+/* ---- status overlay ---- */
+const statusEl = document.getElementById('status');
+const statusText = document.getElementById('statusText');
+const sdot = statusEl.querySelector('.sdot');
+let statusTimer = null;
+function setStatus(color, text, hold){
+  sdot.style.color = color || '#7c6cf0'; sdot.style.background = color || '#7c6cf0';
+  statusText.textContent = text; statusEl.classList.add('show');
+  if(statusTimer){ clearTimeout(statusTimer); statusTimer = null; }
+  if(hold) statusTimer = setTimeout(() => statusEl.classList.remove('show'), hold);
+}
+
+/* ---- tick → trade lifecycle simulation ---- */
+const SCENARIO = [
+  {f:'ib_gw',  t:'bridge', c:C.data, cv:0.15,  s:'① Market tick arrives from IBKR'},
+  {f:'bridge', t:'algo',   c:C.data, cv:0.18,  s:'② ib.tick → algos'},
+  {f:'algo',   t:'orch',   c:C.proc, cv:0.16,  s:'③ signal.order → orchestrator'},
+  {f:'orch',   t:'bridge', c:C.gw,   cv:-0.28, s:'④ ib.place_bracket_order'},
+  {f:'bridge', t:'ib_gw',  c:C.gw,   cv:0.15,  s:'⑤ order routed to IBKR'},
+  {f:'ib_gw',  t:'bridge', c:EV,     cv:0.15,  s:'⑥ entry fill from IBKR'},
+  {f:'bridge', t:'orch',   c:EV,     cv:0.2,   s:'⑦ ib.orderStatus: Filled'},
+  {f:'orch',   t:'tracker',c:EV,     cv:0.2,   s:'⑧ trade → IN_TRADE (state machine)'},
+  {f:'orch',   t:'evlog',  c:EV,     cv:0.2,   s:'⑨ trade.entryFilled logged'},
+  {f:'ib_gw',  t:'bridge', c:C.data, cv:0.15,  s:'⑩ take-profit fill from IBKR'},
+  {f:'bridge', t:'orch',   c:C.data, cv:0.2,   s:'⑪ ib.orderStatus: TP Filled'},
+  {f:'orch',   t:'tracker',c:C.data, cv:0.2,   s:'⑫ trade → CLOSED'},
+  {f:'orch',   t:'evlog',  c:C.data, cv:0.2,   s:'⑬ trade.takeProfitFilled → result'},
+];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let running = false;
+const btnRun = document.getElementById('btnRun');
+async function runScenario(){
+  if(running) return; running = true; btnRun.classList.add('on');
+  for(const hop of SCENARIO){
+    pulseEdge = {f:hop.f, t:hop.t, color:hop.c, cv:hop.cv};
+    setPulse();
+    chart.dispatchAction({type:'highlight', seriesName:'nodes', name:N[hop.t].name});
+    setStatus(hop.c, hop.s);
+    await sleep(780 + Math.random()*520);          // calm, slightly random dwell
+    chart.dispatchAction({type:'downplay', seriesName:'nodes', name:N[hop.t].name});
+  }
+  pulseEdge = null; setPulse();
+  setStatus('#5ec26a', '✓ Trade complete — result logged', 2800);
+  btnRun.classList.remove('on'); running = false;
+}
+btnRun.addEventListener('click', runScenario);
+
+/* ---- auto: fire lifecycles at calm random intervals ---- */
+let autoOn = false, autoTimer = null;
+const btnAuto = document.getElementById('btnAuto');
+async function autoLoop(){
+  if(!autoOn) return;
+  await runScenario();
+  if(!autoOn) return;
+  autoTimer = setTimeout(autoLoop, 3500 + Math.random()*6500);
+}
+btnAuto.addEventListener('click', () => {
+  autoOn = !autoOn;
+  btnAuto.classList.toggle('on', autoOn);
+  btnAuto.textContent = autoOn ? '❚❚ Stop auto' : '▶ Auto';
+  if(autoOn) autoLoop();
+  else if(autoTimer){ clearTimeout(autoTimer); autoTimer = null; }
+});
+
 window.addEventListener('resize', () => chart.resize());
 </script>
 </body>
