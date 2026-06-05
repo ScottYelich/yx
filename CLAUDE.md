@@ -230,6 +230,30 @@ yx/
 > `builds/{python,swift}-impl/` paths in this guide refer to the ephemeral YBS build
 > workspace that is *promoted* into `canonical/`; the committed source is `canonical/`.
 
+## Recommended Architecture (above YX)
+
+**Locked-in direction.** YX is the transport core only; orchestration lives in layers
+above it. When building systems on YX, follow this layering (reference design:
+`docs/sdts-algotrader-topology.html`, modeled on SDTS/AlgoTrader):
+
+1. **YX** (this repo) — secure wire: HMAC transport + Protocol 0 (text/JSON-RPC) +
+   Protocol 1 (binary/chunked) + single-shot RPC dispatch. **No orchestration here.**
+2. **Node mesh** (`YXMesh`, build in **Swift** on YX-Swift) — typed, pluggable
+   **A2A JSON-RPC** nodes: a `Node` base (register RPC handlers + lifecycle +
+   `ping`/`discover`/`health`), an id-matched `RPCClient`, optional `NodeManager`
+   (config-driven start/stop/health, dependency-ordered startup). Reference impl that
+   already works: `sdts/scott/algotrader/` (`services/manager.py`, `services/base.py`,
+   `lib/rpc/client.py`). Multi-step = A→B→C RPC call chains; per-node state machines
+   hold status (e.g. `trade_tracker.py`).
+3. **Workflow** (`YXFlow`, optional) — generic multi-step orchestration with per-step
+   status (`pending/running/done/failed`, retries, timeouts) above the mesh.
+4. **Transport abstraction** — `MessageTransport` with `in-process` and `YX-UDP`
+   backends → same node graph runs embedded or distributed.
+
+**Language strategy:** one framework language — **Swift**. Nodes interoperate over the
+YX wire (cross-language proven), so keep `ib-bridge` in **Python** (mature `ib_async`)
+as a bus node; write the rest in Swift. Do **not** reimplement `ib_async` yet.
+
 ## Key Concepts
 
 ### Canonical Artifacts

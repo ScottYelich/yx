@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SDTS / AlgoTrader — Topology &amp; Data Flow (on YX)</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#131a23; --line:#21262d; --fg:#c9d1d9; --muted:#8b949e;
+    --ext:#9aa4b2; --gw:#f2a154; --data:#5ec26a; --proc:#7c6cf0; --state:#2bb6c4; --mgr:#e0556b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{padding:14px 20px;border-bottom:1px solid var(--line)}
+  header h1{margin:0;font-size:18px;font-weight:650}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  header .crumb a{color:#58a6ff;text-decoration:none}
+  main{display:flex;height:calc(100% - 64px);min-height:520px}
+  #chart{flex:1;min-width:0}
+  aside{width:340px;flex:0 0 340px;border-left:1px solid var(--line);padding:16px 18px;overflow:auto}
+  aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:18px 0 8px}
+  aside h2:first-child{margin-top:0}
+  .key{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:13px}
+  .dot{width:11px;height:11px;border-radius:50%;flex:0 0 11px}
+  ol.flow{margin:0;padding-left:18px;color:var(--fg)} ol.flow li{margin:6px 0}
+  ol.flow code{background:#0b1f33;color:#9ecbff;padding:1px 5px;border-radius:4px;font-size:12px}
+  .layers{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:6px}
+  .layers div{padding:8px 11px;border-bottom:1px solid var(--line);font-size:13px}
+  .layers div:last-child{border-bottom:0}
+  .layers b{color:#fff}
+  .layers .l-yx{background:rgba(88,166,255,.08)} .layers .l-mesh{background:rgba(124,108,240,.08)}
+  .layers .l-flow{background:rgba(94,194,106,.08)} .layers .l-app{background:rgba(224,85,107,.07)}
+  footer{padding:9px 20px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+  .pill{display:inline-block;background:#0b1f33;border:1px solid var(--line);border-radius:999px;
+    padding:1px 9px;color:#9ecbff;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb"><a href="../index.html">yx</a> · reference architecture</div>
+  <h1>SDTS / AlgoTrader — Network Topology &amp; Data Flow</h1>
+  <p>A typed-node mesh over <b>YX</b>: every edge is a JSON-RPC message (Protocol&nbsp;0,
+     UDP broadcast <span class="pill">255.255.255.255:50000</span>, HMAC-signed).
+     Toggle a lane in the legend; hover any node or edge for detail.</p>
+</header>
+<main>
+  <div id="chart"></div>
+  <aside>
+    <h2>Node types</h2>
+    <div class="key"><span class="dot" style="background:var(--ext)"></span>External (IBKR Gateway/TWS)</div>
+    <div class="key"><span class="dot" style="background:var(--gw)"></span>Gateway (ibkr-gateway, ib-bridge)</div>
+    <div class="key"><span class="dot" style="background:var(--data)"></span>Data (market-data-logger / simulator)</div>
+    <div class="key"><span class="dot" style="background:var(--proc)"></span>Processor (signal-algo, orchestrator)</div>
+    <div class="key"><span class="dot" style="background:var(--state)"></span>State / observability</div>
+    <div class="key"><span class="dot" style="background:var(--mgr)"></span>Manager (control plane)</div>
+
+    <h2>How it operates</h2>
+    <ol class="flow">
+      <li><b>Market data:</b> IBKR → <code>ib-bridge</code> (ib_async) → <code>ib.tick</code> → algos &amp; logger.</li>
+      <li><b>Signal:</b> algo → <code>signal.order</code> → orchestrator.</li>
+      <li><b>Order:</b> orchestrator → <code>ib.place_bracket_order</code> → ib-bridge → IBKR.</li>
+      <li><b>Fills/events:</b> IBKR → <code>ib.orderStatus</code> → orchestrator → trade-tracker state machine → <code>trade.entryFilled</code> → logger.</li>
+      <li><b>Control plane:</b> ServiceManager does dependency-ordered start/stop, <code>system.ping</code> &amp; <code>health_check</code>.</li>
+    </ol>
+
+    <h2>Recommended layering (on YX)</h2>
+    <div class="layers">
+      <div class="l-app"><b>App / domain</b> — e.g. trading logic</div>
+      <div class="l-flow"><b>YXFlow</b> — multi-step + status (pending/running/done/failed)</div>
+      <div class="l-mesh"><b>YXMesh</b> — typed A2A JSON-RPC nodes + NodeManager (Swift)</div>
+      <div class="l-yx"><b>YX</b> — secure wire (HMAC + Proto 0/1), transport-agnostic body</div>
+    </div>
+  </aside>
+</main>
+<footer>
+  Logical A→B edges shown for clarity; physically all nodes share the YX broadcast bus.
+  Reference code: <code>sdts/scott/algotrader/</code> — <code>services/manager.py</code>,
+  <code>services/base.py</code>, <code>lib/rpc/client.py</code>; ib-bridge uses Python <code>ib_async</code>.
+</footer>
+
+<script>
+const C = {ext:'#9aa4b2', gw:'#f2a154', data:'#5ec26a', proc:'#7c6cf0', state:'#2bb6c4', mgr:'#e0556b'};
+const N = {
+  ib_gw:  {name:'IBKR Gateway / TWS', x:12,y:90, cat:'ext',  size:30, lang:'IB app (external)',
+           role:'Interactive Brokers Gateway — the market-data & order-execution venue.', rpc:'IB TWS API on :4005'},
+  ibkr_gw:{name:'ibkr-gateway', x:12,y:70, cat:'gw', size:30, lang:'Python',
+           role:'Lifecycle manager: starts/stops/monitors the IB Gateway app as a subprocess (auto-restart).', rpc:'system.ping · health_check'},
+  bridge: {name:'ib-bridge', x:31,y:80, cat:'gw', size:36, lang:'Python · ib_async',
+           role:'Bridges IBKR ⇄ YX. Subscribes ticks & order events via ib_async; exposes ib.* RPC.',
+           rpc:'in: ib.place_bracket_order, ib.positions, ib.account · out: ib.tick, ib.orderStatus'},
+  mdl:    {name:'market-data-logger', x:53,y:84, cat:'data', size:26, lang:'Python',
+           role:'Subscribes ib.tick; records / forwards market data.', rpc:'consumes ib.tick'},
+  algo:   {name:'signal-algo (algos)', x:38,y:27, cat:'proc', size:34, lang:'Python plugins',
+           role:'Strategy plugins (monkey / trender / aggressive). Consume ticks, emit trade signals.',
+           rpc:'ib.tick → signal.order'},
+  orch:   {name:'trading-orchestrator', x:64,y:34, cat:'proc', size:36, lang:'Python',
+           role:'Consumes signal.order; places bracket orders; drives the trade lifecycle state machine.',
+           rpc:'signal.order → ib.place_bracket_order ; ib.orderStatus → trade.*'},
+  tracker:{name:'trade-tracker', x:86,y:46, cat:'state', size:26, lang:'Python',
+           role:'Per-trade state machine: IDLE → PENDING_ENTRY → IN_TRADE → CLOSED; bracket status.', rpc:'state'},
+  evlog:  {name:'trading-event-logger', x:80,y:15, cat:'state', size:24, lang:'Python',
+           role:'Observability — records trade.* lifecycle events.', rpc:'consumes trade.entryFilled …'},
+  mgr:    {name:'ServiceManager', x:10,y:46, cat:'mgr', size:38, lang:'Python · BaseService',
+           role:'Control plane. Loads services.yaml; dependency-ordered start/stop/restart; ping-based health; reconciler / adopt.',
+           rpc:'start · stop · restart · list · system.ping · health_check'},
+};
+const nodeData = Object.keys(N).map(k => {
+  const n = N[k];
+  return {name:n.name, value:[n.x,n.y], symbolSize:n.size, _meta:n,
+          itemStyle:{color:C[n.cat], borderColor:'#0d1117', borderWidth:2,
+                     shadowColor:C[n.cat], shadowBlur:14}};
+});
+
+function lane(name, color, edges, curveness, period){
+  return {
+    name, type:'lines', coordinateSystem:'cartesian2d', z:2, polyline:false,
+    effect:{show:true, period:period||5, trailLength:0.22, symbol:'arrow', symbolSize:8, color},
+    lineStyle:{color, width:1.4, opacity:0.34, curveness:curveness==null?0.2:curveness},
+    label:{show:true, formatter:p => p.data.name||'', color:'#aeb6c2', fontSize:10,
+           textBorderColor:'#0d1117', textBorderWidth:3},
+    emphasis:{focus:'series', lineStyle:{width:2.6, opacity:0.95}, label:{color:'#fff'}},
+    data: edges.map(e => ({name:e.m||'', coords:[[N[e.f].x,N[e.f].y],[N[e.t].x,N[e.t].y]]}))
+  };
+}
+const flows = [
+  lane('IB API / lifecycle', C.ext, [
+    {f:'ib_gw',  t:'bridge', m:'IB TWS API :4005'},
+    {f:'bridge', t:'ib_gw',  m:'placeOrder / cancel'},
+    {f:'ibkr_gw',t:'ib_gw',  m:'launch / monitor'},
+  ], 0.15, 6),
+  lane('Market data', C.data, [
+    {f:'bridge', t:'algo', m:'ib.tick'},
+    {f:'bridge', t:'mdl',  m:'ib.tick'},
+  ], 0.18, 3.5),
+  lane('Signal', C.proc, [
+    {f:'algo', t:'orch', m:'signal.order'},
+  ], 0.16, 4),
+  lane('Order', C.gw, [
+    {f:'orch', t:'bridge', m:'ib.place_bracket_order'},
+  ], -0.28, 4),
+  lane('Fills / events', '#e8c84a', [
+    {f:'bridge', t:'orch',    m:'ib.orderStatus'},
+    {f:'orch',   t:'tracker', m:'trade state'},
+    {f:'orch',   t:'evlog',   m:'trade.entryFilled'},
+  ], 0.2, 4.5),
+  lane('Control plane', C.mgr, [
+    {f:'mgr', t:'ibkr_gw', m:'start/stop · ping · health'},
+    {f:'mgr', t:'bridge',  m:''},
+    {f:'mgr', t:'algo',    m:''},
+    {f:'mgr', t:'orch',    m:''},
+  ], 0.12, 7),
+];
+
+const chart = echarts.init(document.getElementById('chart'), null, {renderer:'canvas'});
+chart.setOption({
+  backgroundColor:'transparent',
+  legend:{ top:10, left:'center', textStyle:{color:'#c9d1d9'}, inactiveColor:'#444c56',
+    data: flows.map(f => f.name), icon:'roundRect' },
+  tooltip:{ trigger:'item', backgroundColor:'#0b1320', borderColor:'#21262d',
+    textStyle:{color:'#e6edf3', fontSize:12}, extraCssText:'max-width:320px;white-space:normal;',
+    formatter: p => {
+      if(p.seriesType==='scatter'){ const m=p.data._meta;
+        return `<b>${m.name}</b> &nbsp;<span style="color:#8b949e">${m.lang}</span><br/>`
+             + `${m.role}<br/><span style="color:#9ecbff">RPC: ${m.rpc}</span>`; }
+      return `<b>${p.data.name||'(broadcast)'}</b><br/>`
+           + `<span style="color:#8b949e">${p.seriesName} · YX JSON-RPC (Protocol 0, UDP :50000)</span>`;
+    }},
+  grid:{left:'2%', right:'2%', top:46, bottom:10},
+  xAxis:{type:'value', min:0, max:100, show:false},
+  yAxis:{type:'value', min:0, max:100, show:false},
+  series:[
+    { name:'nodes', type:'scatter', coordinateSystem:'cartesian2d', z:5, data:nodeData,
+      label:{show:true, position:'bottom', distance:7, color:'#c9d1d9', fontSize:11,
+             formatter:p=>p.data.name, textBorderColor:'#0d1117', textBorderWidth:3},
+      emphasis:{scale:1.15},
+      markArea:{ silent:true, z:0,
+        itemStyle:{color:'rgba(88,166,255,0.05)', borderColor:'rgba(88,166,255,0.22)', borderWidth:1},
+        label:{show:true, position:'insideTop', distance:6, color:'rgba(170,194,230,0.8)', fontSize:11,
+               formatter:'YX UDP bus · JSON-RPC (Protocol 0) · 255.255.255.255:50000 · HMAC-signed'},
+        data:[[{coord:[2,49]},{coord:[98,59]}]] } },
+    ...flows
+  ]
+});
+window.addEventListener('resize', () => chart.resize());
+</script>
+</body>
+</html>

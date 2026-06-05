@@ -77,6 +77,33 @@ python3 tests/interop/run_matrix.py
   (Transport 20, Protocol 0 12, Protocol 1 16; Python↔Python, Python↔Swift,
   Swift↔Python, Swift↔Swift) — run via `tests/interop/run_matrix.py`
 
+## Recommended Architecture (above YX)
+
+YX is the transport **core** — secure, payload-agnostic wire. Orchestration belongs in
+layers **above** it, not inside it. Recommended stack (reference design visualized in
+[`docs/sdts-algotrader-topology.html`](docs/sdts-algotrader-topology.html)):
+
+- **YX** (this repo) — HMAC transport + Protocol 0 (text/JSON-RPC) + Protocol 1
+  (binary/chunked) + single-shot RPC dispatch. No orchestration here, by design.
+- **Node mesh** (proposed `YXMesh`, **Swift** on the finished YX-Swift) — a typed,
+  pluggable **A2A JSON-RPC** node layer: a `Node` base (register RPC handlers +
+  lifecycle + `ping`/`discover`/`health`), an id-matched `RPCClient`, and an optional
+  `NodeManager` (config-driven start/stop/health, dependency-ordered startup).
+  **Reference implementation already exists and works:** SDTS/AlgoTrader
+  (`sdts/scott/algotrader/`: `services/manager.py`, `services/base.py`, `lib/rpc/client.py`).
+- **Workflow** (proposed `YXFlow`, optional) — generic multi-step orchestration with
+  per-step status (`pending/running/done/failed`, retries, timeouts): the reusable form
+  of AlgoTrader's `trade_tracker` state machine. Sits above the mesh.
+- **Transport abstraction** — a `MessageTransport` with `in-process` and `YX-UDP`
+  implementations, so the **same** node graph runs embedded in one binary **or**
+  distributed across a LAN.
+
+**Language strategy:** one framework language — **Swift** (on YX-Swift). Nodes are
+heterogeneous and interoperate over the YX wire (proven by the 48/48 cross-language
+suite), so keep `ib-bridge` in **Python** — where the mature `ib_async` library lives —
+as a node on the bus, and write everything else in Swift. Do **not** reimplement
+`ib_async` until a focused Swift subset clearly pays off.
+
 ## Reference Documentation
 
 - `docs/ybs-overview.md` - Introduction to YBS framework
