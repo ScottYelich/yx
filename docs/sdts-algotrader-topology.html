@@ -66,21 +66,20 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
   header p{margin:4px 0 0;color:var(--muted);font-size:13px}
   header .crumb a{color:#58a6ff;text-decoration:none}
   header .hint{color:#7c6cf0}
-  .controls{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+  .controls{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .controls button{background:#161d27;color:var(--fg);border:1px solid var(--line);border-radius:7px;
     padding:6px 12px;font-size:12px;cursor:pointer}
   .controls button:hover{border-color:#7c6cf0;color:#fff}
   .controls button.on{border-color:#5ec26a;color:#fff;background:#13241a}
   .controls button.run{border-color:#7c6cf0}
+  .statusbox{display:inline-flex;align-items:center;gap:8px;margin-left:6px;padding:6px 12px;
+    border:1px solid var(--line);border-radius:7px;background:#0b1320;color:#e6edf3;font-size:12px;
+    min-width:240px}
+  .statusbox .sdot{width:10px;height:10px;border-radius:50%;flex:0 0 10px;background:#3a4250}
+  .statusbox.active .sdot{box-shadow:0 0 12px currentColor}
+  .statusbox.active{color:#fff}
   main{flex:1 1 auto;display:flex;min-height:0}
-  #chart{flex:1;min-width:0;min-height:0;position:relative}
-  #status{position:absolute;left:14px;top:44px;z-index:6;display:flex;align-items:center;gap:9px;
-    background:rgba(13,17,23,.8);border:1px solid var(--line);border-radius:8px;padding:7px 13px;
-    font-size:13px;color:#e6edf3;max-width:62%;opacity:0;transform:translateY(-4px);
-    transition:opacity .2s,transform .2s;pointer-events:none}
-  #status.show{opacity:1;transform:none}
-  #status .sdot{width:11px;height:11px;border-radius:50%;flex:0 0 11px;background:#7c6cf0;
-    box-shadow:0 0 12px currentColor}
+  #chart{flex:1;min-width:0;min-height:0}
   aside{width:340px;flex:0 0 340px;border-left:1px solid var(--line);padding:16px 18px;overflow:auto}
   aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:18px 0 8px}
   aside h2:first-child{margin-top:0}
@@ -111,16 +110,15 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
      <span class="hint">Drag any node to rearrange</span> (layout saved in this browser) ·
      toggle a lane in the legend · hover for detail.</p>
   <div class="controls">
-    <button id="btnAnim">❚❚ Pause flow</button>
     <button id="btnRun" class="run">⚡ Run tick → trade</button>
     <button id="btnAuto">▶ Auto</button>
+    <button id="btnAnim">❚❚ Pause flow</button>
     <button id="resetTop">↺ Reset layout</button>
+    <span id="status" class="statusbox"><span class="sdot"></span><span id="statusText">idle</span></span>
   </div>
 </header>
 <main>
-  <div id="chart">
-    <div id="status"><span class="sdot"></span><span id="statusText"></span></div>
-  </div>
+  <div id="chart"></div>
   <aside>
     <h2>Node types</h2>
     <div class="key"><span class="dot" style="background:var(--ext)"></span>External (IBKR Gateway/TWS)</div>
@@ -139,7 +137,7 @@ var yo={},mo={};var xo,_o=function(){function t(t,e,n){var i=this;this._sleepAft
       <li><b>Fill:</b> IBKR → <code>ib.orderStatus</code> → orchestrator → trade-tracker (<code>IN_TRADE</code>) → <code>trade.entryFilled</code>.</li>
       <li><b>Result:</b> TP fill → <code>CLOSED</code> → <code>trade.takeProfitFilled</code> → logger.</li>
     </ol>
-    <p style="color:var(--muted);font-size:12px">Press <b>⚡ Run</b> to watch one event cascade hop-by-hop; <b>Auto</b> fires them at calm, random intervals.</p>
+    <p style="color:var(--muted);font-size:12px">Hover an edge to see its RPC method. Press <b>⚡ Run</b> to watch one event cascade; <b>Auto</b> loops at calm, random intervals.</p>
 
     <h2>Recommended layering (on YX)</h2>
     <div class="layers">
@@ -192,8 +190,8 @@ function saveLayout(){const o={};for(const k in N)o[k]=[N[k].x,N[k].y];try{local
 function loadLayout(){try{const o=JSON.parse(localStorage.getItem(LS)||'null');if(o)for(const k in o)if(N[k]){N[k].x=o[k][0];N[k].y=o[k][1];}}catch(e){}}
 loadLayout();
 
-let animOn = true;       // ambient flow particles on/off
-let pulseEdge = null;    // current lifecycle pulse {f,t,color,cv}
+let animOn = true;
+let pulseEdge = null;
 
 function nodeSeries(){
   return {
@@ -201,9 +199,9 @@ function nodeSeries(){
     data: keys.map(k => { const n=N[k];
       return {name:n.name, value:[n.x,n.y], symbolSize:n.size, _key:k, _meta:n,
         itemStyle:{color:C[n.cat], borderColor:'#0d1117', borderWidth:2, shadowColor:C[n.cat], shadowBlur:14}}; }),
-    label:{show:true, position:'bottom', distance:7, color:'#c9d1d9', fontSize:11,
+    label:{show:true, position:'bottom', distance:7, color:'#dbe2ea', fontSize:11,
       formatter:p=>p.data.name, textBorderColor:'#0d1117', textBorderWidth:3},
-    emphasis:{scale:1.35, itemStyle:{borderColor:'#fff', borderWidth:2, shadowBlur:30}}
+    emphasis:{scale:1.4, itemStyle:{borderColor:'#fff', borderWidth:2, shadowBlur:30}}
   };
 }
 
@@ -225,18 +223,18 @@ const flowDefs = [
     {f:'orch',   t:'evlog',   m:'trade.entryFilled'} ]},
   {id:'f_ctl',  name:'Control plane', color:C.mgr, curveness:0.12, period:7, edges:[
     {f:'mgr', t:'ibkr_gw', m:'start/stop · ping · health'},
-    {f:'mgr', t:'bridge',  m:''},
-    {f:'mgr', t:'algo',    m:''},
-    {f:'mgr', t:'orch',    m:''} ]},
+    {f:'mgr', t:'bridge',  m:'start/stop · ping · health'},
+    {f:'mgr', t:'algo',    m:'start/stop · ping · health'},
+    {f:'mgr', t:'orch',    m:'start/stop · ping · health'} ]},
 ];
 function lane(d){
   return {
     id:d.id, name:d.name, type:'lines', coordinateSystem:'cartesian2d', z:2, polyline:false,
     effect:{show:animOn, period:d.period||5, trailLength:0.22, symbol:'arrow', symbolSize:8, color:d.color},
-    lineStyle:{color:d.color, width:1.4, opacity:0.34, curveness:d.curveness==null?0.2:d.curveness},
-    label:{show:true, formatter:p=>p.data.name||'', color:'#aeb6c2', fontSize:10,
-      textBorderColor:'#0d1117', textBorderWidth:3},
-    emphasis:{focus:'series', lineStyle:{width:2.6, opacity:0.95}, label:{color:'#fff'}},
+    lineStyle:{color:d.color, width:1.5, opacity:0.4, curveness:d.curveness==null?0.2:d.curveness},
+    label:{show:false},
+    emphasis:{focus:'series', lineStyle:{width:2.8, opacity:0.95},
+      label:{show:true, formatter:p=>p.data.name||'', color:'#fff', fontSize:11}},
     data: d.edges.map(e => ({name:e.m||'', coords:[[N[e.f].x,N[e.f].y],[N[e.t].x,N[e.t].y]]}))
   };
 }
@@ -244,9 +242,9 @@ function pulseSeries(){
   const e = pulseEdge;
   return {
     id:'pulse', name:'pulse', type:'lines', coordinateSystem:'cartesian2d', z:8, silent:true,
-    effect:{show:!!e, period:0.85, trailLength:0.0, symbol:'circle', symbolSize:18, color:'#ffffff'},
+    effect:{show:!!e, period:0.8, trailLength:0.0, symbol:'circle', symbolSize:18, color:'#ffffff'},
     lineStyle:{color: e?e.color:'#fff', width: e?4:0, opacity: e?0.95:0, curveness: e?(e.cv==null?0.2:e.cv):0,
-      shadowColor: e?'#ffffff':'#fff', shadowBlur: e?16:0},
+      shadowColor:'#ffffff', shadowBlur: e?16:0},
     data: e ? [{coords:[[N[e.f].x,N[e.f].y],[N[e.t].x,N[e.t].y]]}] : []
   };
 }
@@ -273,10 +271,9 @@ chart.setOption({
   series: allSeries()
 });
 
-// Update ONLY the pulse series (merge by id) — reliable, no ambient reset.
 function setPulse(){ chart.setOption({series:[ pulseSeries() ]}); }
 
-/* ---- drag: reposition a node; flow + pulse lines follow ---- */
+/* ---- drag ---- */
 let dragKey = null, rafPending = false;
 chart.on('mousedown', p => {
   if(p.seriesName === 'nodes' && p.data && p.data._key){
@@ -296,7 +293,7 @@ zr.on('mousemove', e => {
 function endDrag(){ if(dragKey){ dragKey = null; document.body.style.cursor=''; saveLayout(); } }
 zr.on('mouseup', endDrag); zr.on('globalout', endDrag); window.addEventListener('mouseup', endDrag);
 
-/* ---- reset to balanced (clears saved layout) ---- */
+/* ---- reset ---- */
 function doReset(){
   try{ localStorage.removeItem(LS); }catch(e){}
   for(const k in HOME){ N[k].x = HOME[k].x; N[k].y = HOME[k].y; }
@@ -305,7 +302,7 @@ function doReset(){
 document.getElementById('reset').addEventListener('click', doReset);
 document.getElementById('resetTop').addEventListener('click', doReset);
 
-/* ---- pause / resume ambient flow ---- */
+/* ---- pause / resume ---- */
 const btnAnim = document.getElementById('btnAnim');
 btnAnim.addEventListener('click', () => {
   animOn = !animOn;
@@ -314,19 +311,22 @@ btnAnim.addEventListener('click', () => {
   btnAnim.classList.toggle('on', !animOn);
 });
 
-/* ---- status overlay ---- */
+/* ---- status (header) ---- */
 const statusEl = document.getElementById('status');
 const statusText = document.getElementById('statusText');
 const sdot = statusEl.querySelector('.sdot');
-let statusTimer = null;
-function setStatus(color, text, hold){
-  sdot.style.color = color || '#7c6cf0';
-  statusText.textContent = text; statusEl.classList.add('show');
-  if(statusTimer){ clearTimeout(statusTimer); statusTimer = null; }
-  if(hold) statusTimer = setTimeout(() => statusEl.classList.remove('show'), hold);
+let clearTimer = null;
+function setStatus(color, text){
+  if(clearTimer){ clearTimeout(clearTimer); clearTimer = null; }
+  sdot.style.color = color; sdot.style.background = color;
+  statusText.textContent = text; statusEl.classList.add('active');
+}
+function idleStatus(delay){
+  if(clearTimer) clearTimeout(clearTimer);
+  clearTimer = setTimeout(() => { statusEl.classList.remove('active'); sdot.style.background='#3a4250'; statusText.textContent='idle'; }, delay||0);
 }
 
-/* ---- tick → trade lifecycle simulation ---- */
+/* ---- tick → trade lifecycle ---- */
 const SCENARIO = [
   {f:'ib_gw',  t:'bridge', c:C.data, cv:0.15,  s:'① Market tick arrives from IBKR'},
   {f:'bridge', t:'algo',   c:C.data, cv:0.18,  s:'② ib.tick → algos'},
@@ -335,7 +335,7 @@ const SCENARIO = [
   {f:'bridge', t:'ib_gw',  c:C.gw,   cv:0.15,  s:'⑤ order routed to IBKR'},
   {f:'ib_gw',  t:'bridge', c:EV,     cv:0.15,  s:'⑥ entry fill from IBKR'},
   {f:'bridge', t:'orch',   c:EV,     cv:0.2,   s:'⑦ ib.orderStatus: Filled'},
-  {f:'orch',   t:'tracker',c:EV,     cv:0.2,   s:'⑧ trade → IN_TRADE (state machine)'},
+  {f:'orch',   t:'tracker',c:EV,     cv:0.2,   s:'⑧ trade → IN_TRADE'},
   {f:'orch',   t:'evlog',  c:EV,     cv:0.2,   s:'⑨ trade.entryFilled logged'},
   {f:'ib_gw',  t:'bridge', c:C.data, cv:0.15,  s:'⑩ take-profit fill from IBKR'},
   {f:'bridge', t:'orch',   c:C.data, cv:0.2,   s:'⑪ ib.orderStatus: TP Filled'},
@@ -349,14 +349,14 @@ async function runScenario(){
   if(running) return; running = true; btnRun.classList.add('on');
   try {
     for(const hop of SCENARIO){
-      setStatus(hop.c, hop.s);                                   // instant feedback
+      setStatus(hop.c, hop.s);
       chart.dispatchAction({type:'downplay', seriesIndex:0});
       chart.dispatchAction({type:'highlight', seriesIndex:0, dataIndex: idx(hop.t)});
-      try { pulseEdge = {f:hop.f, t:hop.t, color:hop.c, cv:hop.cv}; setPulse(); }
-      catch(err){ console.error('pulse', err); }
-      await sleep(780 + Math.random()*520);                      // calm, slightly random dwell
+      try { pulseEdge = {f:hop.f, t:hop.t, color:hop.c, cv:hop.cv}; setPulse(); } catch(err){ console.error(err); }
+      await sleep(760 + Math.random()*520);
     }
-    setStatus('#5ec26a', '✓ Trade complete — result logged', 2800);
+    setStatus('#5ec26a', '✓ Trade complete — result logged');
+    idleStatus(2600);
   } finally {
     chart.dispatchAction({type:'downplay', seriesIndex:0});
     pulseEdge = null; setPulse();
@@ -365,7 +365,7 @@ async function runScenario(){
 }
 btnRun.addEventListener('click', runScenario);
 
-/* ---- auto: fire lifecycles at calm random intervals ---- */
+/* ---- auto ---- */
 let autoOn = false, autoTimer = null;
 const btnAuto = document.getElementById('btnAuto');
 async function autoLoop(){
