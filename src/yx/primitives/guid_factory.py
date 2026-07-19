@@ -41,15 +41,15 @@ class GUIDFactory:
             bytes: Exactly 6 bytes
 
         Example:
-            >>> GUIDFactory.pad_guid(b'\\x01\\x02')
-            b'\\x01\\x02\\x00\\x00\\x00\\x00'
-            >>> GUIDFactory.pad_guid(b'\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08')
-            b'\\x01\\x02\\x03\\x04\\x05\\x06'
+            >>> GUIDFactory.pad_guid(b'\x01\x02')
+            b'\x01\x02\x00\x00\x00\x00'
+            >>> GUIDFactory.pad_guid(b'\x01\x02\x03\x04\x05\x06\x07\x08')
+            b'\x01\x02\x03\x04\x05\x06'
         """
         if len(guid) == 6:
             return guid
         elif len(guid) < 6:
-            return guid + b'\x00' * (6 - len(guid))
+            return guid + b'' * (6 - len(guid))
         else:
             return guid[:6]
 
@@ -69,7 +69,7 @@ class GUIDFactory:
 
         Example:
             >>> GUIDFactory.from_hex("010203040506")
-            b'\\x01\\x02\\x03\\x04\\x05\\x06'
+            b'\x01\x02\x03\x04\x05\x06'
         """
         guid_bytes = bytes.fromhex(hex_string)
         return GUIDFactory.pad_guid(guid_bytes)
@@ -86,7 +86,23 @@ class GUIDFactory:
             str: Hex string (e.g., "010203040506")
 
         Example:
-            >>> GUIDFactory.to_hex(b'\\x01\\x02\\x03\\x04\\x05\\x06')
+            >>> GUIDFactory.to_hex(b'\x01\x02\x03\x04\x05\x06')
             '010203040506'
         """
         return guid.hex()
+
+
+def guid_to_hex(guid: bytes) -> str:
+    """
+    Convert GUID bytes to uppercase hex string.
+
+    Args:
+        guid: 6-byte GUID
+
+    Returns:
+        Uppercase hex string (e.g., "E32E3CA702DE")
+
+    Traceability:
+    - protocol/specs/architecture/api-contracts.md (Type Conversion Utilities)
+    """
+    return guid.hex().upper()

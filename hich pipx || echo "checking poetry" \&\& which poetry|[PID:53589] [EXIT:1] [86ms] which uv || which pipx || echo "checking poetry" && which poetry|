@@ -1,0 +1,1 @@
+[2026-04-12T09:07:35Z] || which pipx || echo "checking poetry" && which poetry

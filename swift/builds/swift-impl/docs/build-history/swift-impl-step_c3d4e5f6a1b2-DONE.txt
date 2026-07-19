@@ -1,0 +1,15 @@
+# Step c3d4e5f6a1b2 — DONE
+
+**Completed**: 2026-04-12T09:42:41Z
+**Started**: 2026-04-12T09:41:27Z
+**Duration**: 74s
+**Attempts**: 1
+**Success**: true
+
+## Output
+```
+Now I need to create the test file for Packet.
+</think>
+
+<tool_call>{"name"": "write_file", "arguments": {"path": "Tests/YXProtocolTests/Unit/PacketTests.swift", "content": "import XCTest\n@testable import YXProtocol\n\nfinal class PacketTests: XCTestCase {\n   func testCreateValidPacket() throws {\n      let packet = try Packet(\n         hmac: Data(repeating: 0x00, count: 16),\n         guid: Data(repeating: 0x01, count: 6),\n         payload: Data(\"test\".utf8)\n      )\n\n      XCTAssertEqual(packet.hmac.count, 16)\n      XCTAssertEqual(packet.guid.count, 6)\n      XCTAssertEqual(packet.payload, Data(\"test\".utf8))\n   }\n\n   func testToBytes() throws {\n      let packet = try Packet(\n         hmac: Data(repeating: 0xaa, count: 16),\n         guid: Data(repeating: 0xbb, count: 6),\n         payload: Data(\"test\".utf8)\n      )\n\n      let data = packet.toBytes()\n      XCTAssertEqual(data.count, 26)\n      XCTAssertEqual(data[0..<16], Data(repeating: 0xaa, count: 16))\n      XCTAssertEqual(data[16..<22], Data(repeating: 0xbb, count: 6))\n   }\n\n   func testFromBytes() {\n      let data = Data(repeating: 0xaa, count: 16) +\n                  Data(repeating: 0xbb, count: 6) +\n                  Data(\"test\".utf8)\n\n      let packet = Packet.fromBytes(data)\n      XCTAssertNotNil(packet)\n      XCTAssertEqual(packet?.payload, Data(\"test\".utf8))\n   }\n\n   func testRoundtrip() throws {\n      let original = try Packet(\n         hmac: Data(repeating: 0x01, count: 16),\n         guid: Data(repeating: 0x02, count: 6),\n         payload: Data(\"payload\".utf8)\n      )\n\n      let data = original.toBytes()\n      let restored = Packet.fromBytes(data)\n\n      XCTAssertNotNil(restored)\n      XCTAssertEqual(restored?.hmac, original.hmac)\n      XCTAssertEqual(restored?.guid, original.guid)\n      XCTAssertEqual(restored?.payload, original.payload)\n   }\n}\n"}}</tool_call>
+```

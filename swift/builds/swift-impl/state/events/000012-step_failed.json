@@ -1,7 +1,7 @@
 {
-  "error" : "Model used XML <tool_call> format — tool calls not executed. Retry.",
+  "error" : "Exit code 1: ",
   "event" : "step_failed",
   "seq" : 12,
-  "step_id" : "a1b2c3d4e5f6",
-  "ts" : "2026-04-12T05:27:15Z"
+  "step_id" : "b2c3d4e5f6a1",
+  "ts" : "2026-04-12T09:41:27Z"
 }

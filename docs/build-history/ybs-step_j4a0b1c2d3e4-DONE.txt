@@ -1,0 +1,5 @@
+STEP: ybs-step_j4a0b1c2d3e4
+COMPLETED: 2026-04-12T09:26:30Z
+FILES: src/yx/primitives/test_helpers.py, test_test_helpers.py
+VERIFICATION: PASSED
+NEXT: ybs-step_j4b0c1d2e3f4

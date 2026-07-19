@@ -1,7 +1,0 @@
-{
-  "error" : "Model used XML <tool_call> format — tool calls not executed. Retry.",
-  "event" : "step_failed",
-  "seq" : 6,
-  "step_id" : "000000000000",
-  "ts" : "2026-04-12T05:26:29Z"
-}

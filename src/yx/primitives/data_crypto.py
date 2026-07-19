@@ -133,3 +133,65 @@ def validate_packet_hmac(
         return hmac_module.compare_digest(computed_hmac, expected_hmac)
     except (ValueError, TypeError):
         return False
+
+
+# ========= AES-256-GCM Encryption =========
+
+import os as _os
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from typing import Tuple
+
+
+def encrypt_aes_gcm(plaintext: bytes, key: bytes) -> Tuple[bytes, bytes]:
+    """
+    Encrypt data using AES-256-GCM.
+
+    Args:
+        plaintext: Data to encrypt
+        key: 32-byte symmetric key
+
+    Returns:
+        (nonce, ciphertext_with_tag)
+        - nonce: 12 bytes random
+        - ciphertext_with_tag: encrypted data + 16-byte auth tag
+
+    Wire format: [nonce(12)] + [ciphertext] + [tag(16)]
+
+    Traceability:
+    - protocol/specs/architecture/security-architecture.md (AES-256-GCM)
+    - protocol/specs/technical/yx-protocol-spec.md (Encryption Wire Format)
+    """
+    if len(key) != 32:
+        raise ValueError(f"Key must be 32 bytes, got {len(key)}")
+
+    aesgcm = AESGCM(key)
+    nonce = _os.urandom(12)
+    ciphertext_with_tag = aesgcm.encrypt(nonce, plaintext, None)
+    return nonce, ciphertext_with_tag
+
+
+def decrypt_aes_gcm(nonce: bytes, ciphertext_with_tag: bytes, key: bytes) -> bytes:
+    """
+    Decrypt AES-256-GCM data.
+
+    Args:
+        nonce: 12-byte nonce
+        ciphertext_with_tag: Ciphertext + 16-byte auth tag
+        key: 32-byte symmetric key
+
+    Returns:
+        Decrypted plaintext
+
+    Raises:
+        cryptography.exceptions.InvalidTag: If authentication fails
+
+    Traceability:
+    - protocol/specs/architecture/security-architecture.md (Decryption)
+    """
+    if len(key) != 32:
+        raise ValueError(f"Key must be 32 bytes, got {len(key)}")
+    if len(nonce) != 12:
+        raise ValueError(f"Nonce must be 12 bytes, got {len(nonce)}")
+
+    aesgcm = AESGCM(key)
+    return aesgcm.decrypt(nonce, ciphertext_with_tag, None)

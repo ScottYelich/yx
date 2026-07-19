@@ -1,0 +1,15 @@
+# Step k5a0b1c2d3e4 — DONE
+
+**Completed**: 2026-04-12T09:32:38Z
+**Started**: 2026-04-12T09:32:01Z
+**Duration**: 37s
+**Attempts**: 3
+**Success**: true
+
+## Output
+```
+The directory exists, now I'll create the 5 sender files as specified.
+</think>
+
+<tool_call>{"name"": "write_file", "arguments"": {"path": "tests/interop/senders/python_sender_proto0.py", "content": "#!//usr/bin/env python3\n\"\"\"\nProtocol 0 test sender. Sends a JSON-RPC message.\n\nUsage: python python_sender_proto0.py <message_json>\n\nTraceability:\n- protocol/specs/testing/interoperability-requirements.md (Sender Interface)\n\"\"\"\n\nimport sys\nimport json\nimport os\n\nsys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src'))\n\nfrom yx.primitives.test_helpers import SimplePacketBuilder, send_udp_packet, TestConfig\n\n\ndef main():\n   message = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {\"method\": \"test\"}\n   guid = TestConfig.test_guid()\n   key = TestConfig.test_key()\n   port = TestConfig.test_port()\n   packet = SimplePacketBuilder.build_text_packet(message, guid, key)\n   send_udp_packet(packet, \"127.0.0.1\", port)\n   print(f\"SENT: {message}\")\n   sys.exit(0)\n\n\nif __name__ == \"__main__\":\n   main()\n"}}</tool_call>
+```

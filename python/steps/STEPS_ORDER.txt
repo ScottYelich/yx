@@ -1,5 +1,9 @@
 # Python Implementation Build Steps — Execution Order
 # Run from yx/ project root. Step 0 creates builds/<build_name>/
+#
+# Steps 000000-000011 are complete (g1h2i3j4k5l6 = Protocol 0).
+# Steps 000012-000025 are the micro-steps replacing h2-k5 macro-steps.
+# A YBS step is the smallest independently verifiable unit of work.
 
 000000 ybs-step_000000000000
 000001 ybs-step_a1b2c3d4e5f6
@@ -13,7 +17,17 @@
 000009 ybs-step_c4d5e6f7a2b3
 000010 ybs-step_d5e6f7a2b3c4
 000011 ybs-step_g1h2i3j4k5l6
-000012 ybs-step_h2i3j4k5l6m7
-000013 ybs-step_i3j4k5l6m7n8
-000014 ybs-step_j4k5l6m7n8o9
-000015 ybs-step_k5l6m7n8o9p0
+000012 ybs-step_h2a0b1c2d3e4
+000013 ybs-step_h2b0c1d2e3f4
+000014 ybs-step_h2c0d1e2f3a4
+000015 ybs-step_h2d0e1f2a3b4
+000016 ybs-step_i3a0b1c2d3e4
+000017 ybs-step_i3b0c1d2e3f4
+000018 ybs-step_i3c0d1e2f3a4
+000019 ybs-step_i3d0e1f2a3b4
+000020 ybs-step_j4a0b1c2d3e4
+000021 ybs-step_j4b0c1d2e3f4
+000022 ybs-step_k5a0b1c2d3e4
+000023 ybs-step_k5b0c1d2e3f4
+000024 ybs-step_k5c0d1e2f3a4
+000025 ybs-step_k5d0e1f2a3b4
