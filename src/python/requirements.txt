@@ -1,0 +1,21 @@
+# YX Networking Framework - Python Dependencies
+
+# Cryptography for HMAC-SHA256, AES-GCM, key generation
+cryptography>=41.0.0
+
+# YAML configuration parsing (for ServiceManager)
+PyYAML>=6.0
+
+# Terminal UI for dashboard
+blessed>=1.20.0
+
+# System metrics (CPU, memory, disk, network)
+psutil>=5.9.0
+
+# Testing framework
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+
+# Type checking (optional, for development)
+mypy>=1.5.0

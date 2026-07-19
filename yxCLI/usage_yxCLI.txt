@@ -1,0 +1,6 @@
+yxCLI \
+  --identity alpha \
+  --pubkeys Resources/keys/trusted_pubkeys.json \
+  --privkeys Resources/keys/private_keys.json \
+  --pki \
+  --data 1
