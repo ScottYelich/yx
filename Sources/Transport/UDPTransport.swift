@@ -87,8 +87,11 @@ public actor UDPTransport {
         log("🌐 UDP listening on port \(port)", level: .info)
         log("🔍 Socket \(socket) bound successfully to 0.0.0.0:\(port)", level: .info)
 
-        // Start receive loop in unstructured task (returns immediately)
-        receiveTask = Task {
+        // Start receive loop DETACHED from this actor's executor.
+        // receiveLoop blocks in recvfrom(); if it ran actor-isolated it would starve
+        // the actor forever and queued send()/stop() calls would never execute
+        // (bug found 2026-07-19: "Sent" was logged but no bytes ever left the socket).
+        receiveTask = Task.detached { [self] in
             await receiveLoop(
                 socket: socket,
                 guid: guid,
@@ -174,7 +177,9 @@ public actor UDPTransport {
 
     // MARK: - Private
 
-    private func receiveLoop(
+    // nonisolated: must run OFF the actor executor — the blocking recvfrom() would
+    // otherwise hold the actor and starve every queued send()/stop() call.
+    nonisolated private func receiveLoop(
         socket: Int32,
         guid: Data,
         defaultKey: SymmetricKey,
@@ -224,9 +229,9 @@ public actor UDPTransport {
             let data = Data(buffer[0..<received])
             let packetGUID = data.count >= 22 ? data.subdata(in: 16..<22) : nil
 
-            // Get key for this packet - check peerKeys directly since we're in the actor
+            // Get key for this packet - hop into the actor for the peerKeys lookup
             let key: SymmetricKey
-            if let guid = packetGUID, let peerKey = self.key(for: guid) {
+            if let guid = packetGUID, let peerKey = await self.key(for: guid) {
                 key = peerKey
                 let keyHex = key.withUnsafeBytes { Data($0).hexString }
                 log("🧪 [UDPNetworking] Using derived key for \(guid.hexString): \(keyHex)", level: .debug)
@@ -242,8 +247,8 @@ public actor UDPTransport {
 
             log("📦 Parsed packet - GUID: \(packet.guid?.hexString ?? "nil"), Errors: \(packet.errors)", level: .info)
 
-            // Access actor-isolated property directly (no await needed inside actor)
-            let shouldProcess = self.processOwnPackets
+            // Actor-isolated property — explicit hop from the nonisolated loop
+            let shouldProcess = await self.processOwnPackets
             if packet.guid == guid && !shouldProcess {
                 log("🛑 Skipped self-sent packet with GUID \(guid.hexString)", level: .info)
                 continue

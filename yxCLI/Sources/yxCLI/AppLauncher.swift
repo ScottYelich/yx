@@ -1,7 +1,7 @@
 // filename: AppLauncher.swift
 
 import Foundation
-import Application
+import YX
 import Transport
 import Primitives
 import CryptoKit
@@ -35,19 +35,16 @@ enum AppLauncher {
             await DemoSender.sendTaskHello(using: comms, targets: config.peers)
         }
 
-        // Set up shutdown timer if configured
+        // Shutdown timer: await INLINE. A fire-and-forget Task here let launch()
+        // return immediately, killing the process (<200 ms) before any packet was
+        // sent or received (bug found 2026-07-19 during v2 consolidation).
         if let shutdownAfter = config.shutdownAfterSeconds {
             log("⏱️  Will shutdown after \(shutdownAfter) seconds", level: .info)
-            Task {
-                try? await Task.sleep(nanoseconds: UInt64(shutdownAfter) * 1_000_000_000)
-                log("⏱️  Shutdown timer expired", level: .info)
-                await comms.shutdown()
-                exit(0)
-            }
-        }
-
-        // Keep alive indefinitely if no shutdown timer
-        if config.shutdownAfterSeconds == nil {
+            try? await Task.sleep(nanoseconds: UInt64(shutdownAfter) * 1_000_000_000)
+            log("⏱️  Shutdown timer expired", level: .info)
+            await comms.shutdown()
+        } else {
+            // Keep alive indefinitely if no shutdown timer
             log("🔄 Running indefinitely (Ctrl+C to stop)", level: .info)
             try? await Task.sleep(nanoseconds: UInt64.max)
         }

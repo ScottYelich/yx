@@ -9,7 +9,7 @@
 // filename: AppInitializer.swift
 
 import Foundation
-import Application
+import YX
 import Primitives
 
 enum AppInitializer {
