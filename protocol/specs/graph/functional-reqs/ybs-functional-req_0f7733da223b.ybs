@@ -1,0 +1,2 @@
+(functional-req (id "0f7733da223b") (version "1.0.0") (status 'implemented) (for "d93037cecb98") (priority 'critical)
+  (title "Canonical signing bytes") (description "The signer shall produce canonical bytes: drop (sig), keep (key-id), fields sorted by head symbol via UTF-8 byte order; byte-identical across Swift and Python."))

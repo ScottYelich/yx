@@ -1,0 +1,3 @@
+(acceptance-test (id "52a2514787bb") (version "1.0.0") (status 'implemented) (for "ca295ea8b75e") (level 'integration)
+  (title "Untrusted command REFUSED") (given "a (type command) unsigned OR signed by a key not in trusted-signers") (expect "node logs REFUSED; action not taken")
+  (verify (shell= 0 "swift test --filter SigningTests")))

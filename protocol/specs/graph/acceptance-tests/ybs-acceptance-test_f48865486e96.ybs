@@ -1,0 +1,3 @@
+(acceptance-test (id "f48865486e96") (version "1.0.0") (status 'implemented) (for "d93037cecb98") (level 'smoke)
+  (title "Full suite green") (given "the yx swift package") (expect "build clean and all tests pass")
+  (verify (and (shell= 0 "swift build") (shell= 0 "swift test"))))

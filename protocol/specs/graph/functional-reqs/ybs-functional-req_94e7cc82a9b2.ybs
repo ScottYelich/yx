@@ -1,0 +1,2 @@
+(functional-req (id "94e7cc82a9b2") (version "1.0.0") (status 'implemented) (for "d93037cecb98") (priority 'critical)
+  (title "Ed25519 sign/verify") (description "The system shall sign canonical bytes with an Ed25519 key (private in Keychain) and verify a detached ed25519:<b64> signature against a public key."))

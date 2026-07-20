@@ -1,0 +1,26 @@
+(technical-spec-doc
+  (title "Protocol-0 — S-expression text")
+  (status implemented) (author "Scott D. Yelich") (implements-adr "D11")
+  (decision
+    "Protocol-0 payloads are S-expressions dispatched on the head symbol (car). First list
+     element is the verb; the rest are arguments. No {method,params} envelope. JSON only at
+     external edges (mlx-router OpenAI API, MCP, 3rd-party HTTP).")
+  (wire
+    (framing "one UTF-8 s-expr; completeness = paren depth returns to 0; self-delimiting")
+    (dispatch "peek first non-ws byte: '(' -> parse + dispatch on car; '{' -> legacy JSON-RPC shim"))
+  (grammar
+    (sexpr  (or atom list))
+    (list   "'(' ws? (sexpr (ws sexpr)*)? ws? ')'")
+    (symbol "[A-Za-z][A-Za-z0-9._-]*")
+    (string "double-quoted; escapes \\\" \\\\ \\/ \\n \\t")
+    (number "-? digits (. digits)?")
+    (comment ";; to end-of-line, ignored"))
+  (verbs
+    (node-hello "(node-hello (node <id>) (agents <csv>))  presence heartbeat")
+    (node-info  "(node-info)  request identity; reply (node-info-reply ...)")
+    (msg        "(msg ...)  agent message — see message-format.sxp"))
+  (verify
+    (v1 "SExpr parser round-trips (a (b \"x y\") (c 12) (d -3.5))")
+    (v2 "node emits (node-hello ...); peer parses+dispatches -> presence updates")
+    (v3 "(msg ...) delivered -> .sxp file written; JSON {..} still accepted by the shim")
+    (v4 "cross-machine node discovery + (msg ...) both ways, pure s-expr")))

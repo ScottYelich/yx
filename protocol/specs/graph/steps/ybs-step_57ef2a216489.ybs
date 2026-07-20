@@ -1,0 +1,3 @@
+(step (id "57ef2a216489") (version "1.0.0") (status 'done) (title "Trust store + yxkey signing keys")
+  (implements "0bd904da873b") (requires "1d5e9fe9b7b6")
+  (objectives "load trusted-signers.sxp" "yxkey sign-gen/pub/list"))

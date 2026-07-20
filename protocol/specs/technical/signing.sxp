@@ -1,0 +1,29 @@
+(technical-spec-doc
+  (title "yx message signing — Ed25519 over canonical s-expr")
+  (status implemented) (author "Scott D. Yelich") (implements-adr "D12")
+  (keys
+    (algo ed25519)
+    (private "Keychain: service org.spy.yx.sig, account = <agent-id>, value = base64(32-byte seed)")
+    (public "base64(32 raw bytes)")
+    (yxkey "sign-gen --id | sign-pub --id | sign-list"))
+  (trusted-signers
+    (path "~/.config/yx/trusted-signers.sxp")
+    (form "(trusted-signers (signer (id <agent-id>) (key <b64-pubkey>)) ...)")
+    (rule "in set = trusted for authority; absent = untrusted (chat only)"))
+  (canonical-bytes
+    "drop (sig); KEEP (key-id); emit (msg then child fields sorted ASCENDING by child head
+     symbol via raw UTF-8 byte order; standard writer; single spaces) then ) ; UTF-8.
+     MUST be byte-identical across Swift and Python.")
+  (sign "ed25519 over canonical bytes -> append (key-id <id>) (sig ed25519:<b64-64B>)")
+  (verify-rule
+    "strip (sig); recompute canonical; verify sig with pubkey for (key-id); require key-id in
+     trusted-signers; honor only if BOTH hold")
+  (authority
+    "(type command|order) executed only if a valid trusted signature is present; else REFUSED.
+     other types need no signature. enforce at the point of action; never trust (from).")
+  (note "CryptoKit ed25519 signing is randomized; cross-language contract is VERIFY, not sig-byte-equality")
+  (verify
+    (v1 "sign-gen -> sign-pub round-trips; private in Keychain")
+    (v2 "sign a (type command); verify true; false if any canonical byte changes or wrong pubkey")
+    (v3 "cross-language: Swift-signed verifies in Python and vice-versa (shared fixture)")
+    (v4 "yxnode HONORS trusted-signed command, REFUSES unsigned/untrusted — all 4 lang combos")))

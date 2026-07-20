@@ -1,0 +1,3 @@
+(acceptance-test (id "08b96da99d34") (version "1.0.0") (status 'implemented) (for "ca295ea8b75e") (level 'integration)
+  (title "Trusted command EXECUTED") (given "a (type command) signed by a trusted key-id") (expect "node logs EXECUTED")
+  (verify (shell= 0 "swift test --filter SigningTests")))

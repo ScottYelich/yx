@@ -1,0 +1,2 @@
+(functional-req (id "dd25da0af67d") (version "1.0.0") (status 'implemented) (for "d93037cecb98") (priority 'high)
+  (title "Trusted-signers store") (description "The node shall load ~/.config/yx/trusted-signers.sxp into {agent-id: pubkey}; absent entry = untrusted."))

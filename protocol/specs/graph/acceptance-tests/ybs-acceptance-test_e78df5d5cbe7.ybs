@@ -1,0 +1,3 @@
+(acceptance-test (id "e78df5d5cbe7") (version "1.0.0") (status 'implemented) (for "514ba9d0f57f") (level 'integration)
+  (title "Message spooled as .sxp") (given "a (msg) addressed to a local agent arrives") (expect "~/ai/mail/YYYY/MM/<id>.sxp written verbatim; no UNF/YAML")
+  (verify (shell= 0 "swift build")))

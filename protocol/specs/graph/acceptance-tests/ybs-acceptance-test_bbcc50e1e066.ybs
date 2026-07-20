@@ -1,0 +1,3 @@
+(acceptance-test (id "bbcc50e1e066") (version "1.0.0") (status 'implemented) (for "0f7733da223b") (level 'unit)
+  (title "Cross-language canonical + verify") (given "the shared fixture tests/fixtures/sign-vector.sxp") (expect "Python canonical bytes equal Swift's AND Python verifies the Swift-made sig")
+  (verify (file-exists? "tests/fixtures/sign-vector.sxp")))

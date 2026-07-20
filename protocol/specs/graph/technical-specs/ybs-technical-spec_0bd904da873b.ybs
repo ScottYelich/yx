@@ -1,0 +1,2 @@
+(technical-spec (id "0bd904da873b") (version "1.0.0") (status 'implemented) (for "d93037cecb98")
+  (title "Ed25519 signing over canonical s-expr") (document "protocol/specs/technical/signing.sxp"))

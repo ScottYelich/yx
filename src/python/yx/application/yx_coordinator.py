@@ -114,6 +114,23 @@ class YXCoordinator:
         # Route to protocol handler
         await self.protocol_router.route(payload)
 
+    def register_sexp(self, head, handler):
+        """Register an S-expression handler for a car (head) symbol (ADR D11)."""
+        self.text_protocol.register_sexp(head, handler)
+
+    async def send_sexpr_packet(self, expr, host: str, port: int):
+        """
+        Send an S-expression as a Protocol-0 text payload (ADR D11).
+
+        Args:
+            expr: SExpr to send (serialized to its light canonical form)
+            host: Destination host
+            port: Destination port
+        """
+        payload = expr.serialize().encode("utf-8")
+        await self.udp_transport.send(payload, host, port)
+        logger.send(f"Sent s-expr packet to {host}:{port}")
+
     async def send_text_packet(self, message: dict, host: str, port: int):
         """
         Send text protocol packet.

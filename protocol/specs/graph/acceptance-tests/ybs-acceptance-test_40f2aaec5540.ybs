@@ -1,0 +1,3 @@
+(acceptance-test (id "40f2aaec5540") (version "1.0.0") (status 'implemented) (for "1e05497367e9") (level 'integration)
+  (title "Car-dispatch pure s-expr") (given "two nodes peered on loopback") (expect "each discovers the other via (node-hello); payload first byte is 0x28")
+  (verify (shell= 0 "swift test")))

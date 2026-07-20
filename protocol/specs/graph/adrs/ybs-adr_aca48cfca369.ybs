@@ -1,0 +1,5 @@
+(adr (id "aca48cfca369") (version "1.0.0") (status 'approved) (for "d93037cecb98")
+  (title "D12: Ed25519-signed authority over a flat trust store")
+  (decision "Authority messages require a trusted Ed25519 signature; membership stays HMAC; no PKI.")
+  (rationale "Membership != trust; canonical s-expr (csexp-shaped) is a clean signing substrate.")
+  (source "protocol/specs/architecture/ybs-decisions.md#D12"))

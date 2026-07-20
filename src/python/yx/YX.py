@@ -150,6 +150,39 @@ class YX:
         self._coordinator.rpc_dispatcher.register(method, handler)
         logger.info(f"Registered RPC handler: {method}")
 
+    def register_sexp(
+        self,
+        head: str,
+        handler: Callable[[Any], Awaitable[None]]
+    ):
+        """
+        Register an S-expression handler for a car (head) symbol
+        (Protocol-0 s-expr, ADR D11).
+
+        Args:
+            head: The car symbol to dispatch on (e.g., "node-hello", "msg")
+            handler: Async function receiving the parsed SExpr
+        """
+        self._coordinator.register_sexp(head, handler)
+        logger.info(f"Registered S-expr handler: {head}")
+
+    async def sendSexpr(
+        self,
+        expr: Any,
+        host: str,
+        port: int
+    ):
+        """
+        Send an S-expression as a Protocol-0 text payload (ADR D11).
+
+        Args:
+            expr: SExpr to send (serialized to its light canonical form)
+            host: Destination IP address (use "255.255.255.255" for broadcast)
+            port: Destination port
+        """
+        await self._coordinator.send_sexpr_packet(expr, host, port)
+        logger.send(f"Sent s-expr to {host}:{port}")
+
     async def sendText(
         self,
         message: Dict[str, Any],

@@ -1,0 +1,5 @@
+(feature (id "36a232582d9d") (version "1.0.0") (status 'implemented)
+  (title "S-expression Protocol-0 (D11)")
+  (description
+    "yx Protocol-0 payloads are S-expressions dispatched on the head symbol (car), not
+     JSON-RPC. Structured data is s-expr across the ecosystem; JSON only at external edges."))

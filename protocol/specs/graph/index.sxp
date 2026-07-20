@@ -1,0 +1,4 @@
+(spec-graph (title "yx D11/D12 spec graph") (author "Scott D. Yelich")
+  (features "36a232582d9d" "d93037cecb98")
+  (note "GUID-linked YBS graph for D11 (s-expr Protocol-0) + D12 (signed authority). Validate:
+         ../../../.. run ybs validate-graph over this dir. All artifacts are .ybs/.sxp — no .md."))

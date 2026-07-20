@@ -1,0 +1,28 @@
+(technical-spec-doc
+  (title "yx message format — (msg ...)")
+  (status implemented) (author "Scott D. Yelich") (implements-adr "D11" "D12")
+  (schema
+    (msg
+      (v 1 required) (id "hex8+, required; dedup+thread key = (from,id)")
+      (type "request|ack|reply|reject|note|command|order, required")
+      (from "agent-id, required (yx GUID = node, not agent)")
+      (to "node/agent-id or @all, required")
+      (created "ISO-8601, required; advisory (clock skew) — never a dedup key")
+      (in-reply-to "required on ack/reply/reject; forbidden on request")
+      (subject "required on request/note; optional else")
+      (body "required on reject; optional else")
+      (priority "optional: low|normal|high")
+      (content-type "optional: text|markdown|json — describes body")
+      (data "optional: native nested s-expr payload")
+      (thread "optional: conversation root id")
+      (refs "optional: (commit ..)(step ..)(file ..)")
+      (key-id "D12: which pubkey signed (authority msgs)")
+      (sig "D12: ed25519:<b64> over canonical bytes")))
+  (conversation
+    "request -> optional ack -> reply(done) | reject(why). 1->many = one msg per recipient with
+     distinct ids. broadcast = (to @all)(type note), no acks. sender learns outcome only from
+     inbound reply/ack matched on in-reply-to.")
+  (storage "received (msg) spooled verbatim as ~/ai/mail/YYYY/MM/<id>.sxp — never UNF/YAML/markdown")
+  (verify
+    (v1 "a (type request) round-trips through parse/serialize")
+    (v2 "spool file is the exact received s-expr")))

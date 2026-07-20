@@ -1,0 +1,3 @@
+(step (id "1d8e40357ded") (version "1.0.0") (status 'done) (title "yxnode s-expr + .sxp spool")
+  (implements "c504fa926e0e") (requires "202cff60902f")
+  (objectives "(node-hello)/(msg) as s-expr" "spool .sxp" "retire UNF"))

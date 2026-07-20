@@ -1,0 +1,5 @@
+(feature (id "d93037cecb98") (version "1.0.0") (status 'implemented)
+  (title "Signed authority over a flat trust store (D12)")
+  (description
+    "Membership = shared HMAC mesh key. Authority (executable commands) requires a valid
+     Ed25519 signature from a key in the receiver's flat trusted-signers store. Encrypted != trusted."))

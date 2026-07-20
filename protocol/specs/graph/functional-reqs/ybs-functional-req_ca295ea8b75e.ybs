@@ -1,0 +1,2 @@
+(functional-req (id "ca295ea8b75e") (version "1.0.0") (status 'implemented) (for "d93037cecb98") (priority 'critical)
+  (title "Command authority") (description "The node shall EXECUTE a (type command) only if it carries a valid signature from a key-id in trusted-signers; otherwise REFUSE."))

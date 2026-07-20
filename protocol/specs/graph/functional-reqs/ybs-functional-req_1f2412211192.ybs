@@ -1,0 +1,2 @@
+(functional-req (id "1f2412211192") (version "1.0.0") (status 'implemented) (for "36a232582d9d") (priority 'high)
+  (title "(msg) message format") (description "An agent message shall be a single (msg (v)(id)(type)(from)(to)(created)...) s-expression per message-format.md."))

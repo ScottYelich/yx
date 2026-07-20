@@ -1,0 +1,2 @@
+(functional-req (id "514ba9d0f57f") (version "1.0.0") (status 'implemented) (for "36a232582d9d") (priority 'medium)
+  (title "Spool as .sxp") (description "A received (msg) addressed to a local agent shall be written verbatim as ~/ai/mail/YYYY/MM/<id>.sxp; UNF is retired."))

@@ -1,0 +1,3 @@
+(acceptance-test (id "455973d4ac84") (version "1.0.0") (status 'implemented) (for "1f2412211192") (level 'unit)
+  (title "SExpr round-trip") (given "a nested s-expr with quoted strings and numbers") (expect "parse->serialize->parse yields an equal tree")
+  (verify (shell= 0 "swift test --filter SExprTests")))

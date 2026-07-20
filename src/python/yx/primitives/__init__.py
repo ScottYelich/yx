@@ -11,8 +11,16 @@ from .data_chunking import chunk_data, unchunk_data
 from .data_hex import bytes_to_hex, hex_to_bytes
 from .logger import Logger
 from .operation_result import OperationResult, Success, Failure
+from .sexpr import SExpr
+from .sexpr_sign import canonical_msg_bytes
+from . import signer
+from . import trusted_signers
 
 __all__ = [
+    "SExpr",
+    "canonical_msg_bytes",
+    "signer",
+    "trusted_signers",
     "GUIDFactory",
     "guid_to_hex",
     "hex_to_guid",
