@@ -191,3 +191,30 @@ Packets with a GUID seen within the TTL window are rejected.
 ### Consequences
 GUIDs must be cryptographically random (D04) to prevent GUID prediction attacks.
 The TTL is normative (300 seconds) — implementations must not use a shorter window.
+
+---
+
+## D08: Mesh keys live in the macOS Keychain, never in repos (2026-07-19)
+
+**Decision:** HMAC mesh keys are stored in the login Keychain
+(`service org.spy.yx`, one account per mesh). Tools resolve:
+`--key` flag → `YX_KEY` env → Keychain → built-in dev key WITH loud warning.
+**Why:** the key IS mesh membership; the dev key is in public git history.
+**Consequence:** `yxkey` CLI (Swift) + `MeshKey` resolver in Primitives;
+python mirrors via `security` subprocess. Spec: key-management.md.
+
+## D09: Swift is the base implementation; Python is validation + edges (2026-07-19)
+
+**Decision:** New YX code (node daemon, tools, services) is written in Swift,
+consumed via SPM (this repo is the package). The Python implementation is kept
+for wire-format parity validation and for the two Python-bound edges
+(ib_async bridge, MLX tooling) until they migrate. No pip distribution.
+**Why:** the surrounding ecosystem (murphy, dagsmith, agent, memory, mind) is
+Swift; single codesigned binaries beat interpreter/venv maintenance.
+
+## D10: Discovery is pluggable — UDP broadcast now, Bonjour later (2026-07-19)
+
+**Decision:** Peer discovery v1 stays 255.255.255.255 broadcast (flat LAN).
+The node daemon treats discovery as a strategy so mDNS/Bonjour (NWBrowser /
+NetService) can be added without protocol changes. Discovery is NOT membership;
+the HMAC key remains the only trust boundary (D08).
