@@ -16,6 +16,11 @@ func usage() {
       yxkey list                     list mesh names stored in the Keychain
       yxkey remove   [--mesh NAME]   delete the named key
 
+    Signing keys (Ed25519, ADR D12; Keychain service \(Signer.service)):
+      yxkey sign-gen  --id AGENT     generate keypair, store private, print pubkey (base64)
+      yxkey sign-pub  --id AGENT     print the public key (base64)
+      yxkey sign-list                list signing agent-ids present
+
     Default mesh name: "\(MeshKey.defaultMesh)".
     Key = 32 bytes / 64 hex chars. Never passed on argv (set reads stdin).
     """)
@@ -24,6 +29,11 @@ func usage() {
 func meshArg(_ args: [String]) -> String {
     if let i = args.firstIndex(of: "--mesh"), i + 1 < args.count { return args[i + 1] }
     return MeshKey.defaultMesh
+}
+
+func idArg(_ args: [String]) -> String? {
+    if let i = args.firstIndex(of: "--id"), i + 1 < args.count { return args[i + 1] }
+    return nil
 }
 
 let args = Array(CommandLine.arguments.dropFirst())
@@ -81,6 +91,30 @@ case "list":
     }
     if meshes.isEmpty { FileHandle.standardError.write(Data("no yx mesh keys stored\n".utf8)) }
     else { meshes.sorted().forEach { print($0) } }
+
+case "sign-gen":
+    guard let id = idArg(args) else {
+        FileHandle.standardError.write(Data("sign-gen requires --id <agent-id>\n".utf8)); exit(2)
+    }
+    guard let pub = Signer.generate(agentID: id) else {
+        FileHandle.standardError.write(Data("failed to generate/store signing key for '\(id)'\n".utf8)); exit(1)
+    }
+    print(pub)  // stdout: distributable pubkey for trusted-signers.sxp
+    FileHandle.standardError.write(Data("stored Ed25519 signing key for agent '\(id)'\n".utf8))
+
+case "sign-pub":
+    guard let id = idArg(args) else {
+        FileHandle.standardError.write(Data("sign-pub requires --id <agent-id>\n".utf8)); exit(2)
+    }
+    guard let pub = Signer.publicKey(agentID: id) else {
+        FileHandle.standardError.write(Data("no signing key stored for agent '\(id)'\n".utf8)); exit(1)
+    }
+    print(pub)
+
+case "sign-list":
+    let ids = Signer.list()
+    if ids.isEmpty { FileHandle.standardError.write(Data("no yx signing keys stored\n".utf8)) }
+    else { ids.forEach { print($0) } }
 
 case "remove":
     if MeshKey.keychainRemove(mesh: mesh) {

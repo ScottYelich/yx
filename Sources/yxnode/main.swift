@@ -27,12 +27,18 @@ if flag("-h") || flag("--help") {
     USAGE: yxnode [--node ID] [--port N] [--peers h:p,h:p] [--mesh NAME]
                   [--agents a,b] [--heartbeat SEC] [--spool DIR]
                   [--broadcast IP] [--shutdown-after SEC]
+                  [--trusted-signers PATH]
                   [--send-test TO --send-body TEXT]
+                  [--send-command TO --send-body TEXT [--sign-as AGENT]]
 
     Defaults: node=hostname port=9720 mesh=agents heartbeat=5
               spool=~/ai/mail  broadcast=(none; use --peers on loopback)
+              trusted-signers=~/.config/yx/trusted-signers.sxp
     Key: resolved via MeshKey (--key > YX_KEY > Keychain(mesh) > dev key).
     --send-test: send one (msg …) to TO via each peer, then exit (loopback proof).
+    --send-command: send one (msg (type command) …) to TO via each peer, then exit.
+      With --sign-as, signs with that agent's Ed25519 Keychain key (ADR D12);
+      without it the command goes out UNSIGNED (receivers will refuse it).
     """)
     exit(0)
 }
@@ -55,6 +61,11 @@ let peers: [(host: String, port: UInt16)] = (arg("--peers") ?? "")
     }
 
 let (key, keySource) = MeshKey.resolve(explicitHex: arg("--key"), mesh: mesh)
+
+// D12: trusted-signers store — loaded once at boot. Missing ⇒ nothing trusted.
+let trustedPath = arg("--trusted-signers").map { ($0 as NSString).expandingTildeInPath }
+                    ?? TrustedSigners.defaultPath
+let trustedSigners = TrustedSigners.load(path: trustedPath)
 
 // MARK: - Presence directory
 
@@ -108,6 +119,7 @@ func p(_ s: String) { print(s); fflush(stdout) }
 
 p("🧩 yxnode '\(nodeID)' agents=\(agents) port=\(port) mesh=\(mesh) key=\(keySource.rawValue)")
 p("📬 spool: \(spoolDir)")
+p("🔏 trusted signers: \(trustedSigners.count) (\(trustedPath))")
 
 let yx = await YX(port: port, key: key)
 
@@ -137,6 +149,24 @@ await yx.registerSexp("msg") { expr in
         agents.contains(t) || t == nodeID || t.hasPrefix("\(nodeID)/")
     }
     guard localHit else { return }   // not for us; ignore (filtering, message-format.md)
+
+    // D12 authority: (type command) / (type order) is ACTED ON only with a
+    // valid (sig) from a trusted (key-id). Never trust `from` — the signature
+    // is the truth. (signing.md §4)
+    let msgType = expr.field("type")?.symValue ?? expr.field("type")?.stringValue ?? ""
+    if msgType == "command" || msgType == "order" {
+        let body = expr.field("body")?.stringValue ?? ""
+        if let keyID = expr.field("key-id")?.stringValue,
+           let sig = expr.field("sig")?.stringValue,
+           let pubkey = trustedSigners[keyID],          // key-id ∈ trusted-signers
+           Signer.verify(SExpr.canonicalMsgBytes(expr), sig: sig, pubkeyB64: pubkey) {
+            p("✅ EXECUTED command from \(keyID): \(body)")
+        } else {
+            p("🚫 REFUSED command (untrusted/unsigned): \(body)")
+        }
+        return
+    }
+
     let givenID = expr.field("id")?.stringValue ?? ""
     let id = givenID.isEmpty ? unfID() : givenID
     if let path = writeSxp(id: id, raw: expr.serialize()) {
@@ -165,6 +195,44 @@ if let testTo = arg("--send-test") {
     ])
     for peer in peers { await yx.sendSexpr(msg, to: peer.host, port: peer.port) }
     p("📤 send-test (msg …) → \(testTo) via \(peers.count) peer(s)")
+    try? await Task.sleep(nanoseconds: 1_000_000_000)  // let the send land
+    await yx.shutdown()
+    exit(0)
+}
+
+// MARK: - Send-command (D12: one (msg (type command) …), signed or unsigned, then exit)
+
+if let cmdTo = arg("--send-command") {
+    let body = arg("--send-body") ?? "command"
+    let signAs = arg("--sign-as")
+    let iso = ISO8601DateFormatter()
+    try? await Task.sleep(nanoseconds: 500_000_000)   // let peers come up
+    var children: [SExpr] = [
+        .sym("msg"),
+        .list([.sym("v"), .num(1)]),
+        .list([.sym("id"), .str(unfID())]),
+        .list([.sym("type"), .sym("command")]),
+        .list([.sym("from"), .str(signAs ?? agents.first ?? "\(nodeID)/claude")]),
+        .list([.sym("to"), .str(cmdTo)]),
+        .list([.sym("created"), .str(iso.string(from: Date()))]),
+        .list([.sym("body"), .str(body)]),
+    ]
+    if let signAs {
+        // Bind the signer identity via (key-id …), sign the canonical bytes
+        // (which include key-id, exclude sig), then append (sig …).
+        children.append(.list([.sym("key-id"), .str(signAs)]))
+        let canonical = SExpr.canonicalMsgBytes(.list(children))
+        guard let sig = Signer.sign(canonical, agentID: signAs) else {
+            FileHandle.standardError.write(Data(
+                "❌ no signing key for '\(signAs)' — run: yxkey sign-gen --id \(signAs)\n".utf8))
+            await yx.shutdown()
+            exit(1)
+        }
+        children.append(.list([.sym("sig"), .str(sig)]))
+    }
+    let msg = SExpr.list(children)
+    for peer in peers { await yx.sendSexpr(msg, to: peer.host, port: peer.port) }
+    p("📤 send-command (\(signAs.map { "signed as \($0)" } ?? "UNSIGNED")) → \(cmdTo) via \(peers.count) peer(s)")
     try? await Task.sleep(nanoseconds: 1_000_000_000)  // let the send land
     await yx.shutdown()
     exit(0)
