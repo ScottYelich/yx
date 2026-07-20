@@ -26,21 +26,22 @@ async def main():
     parser.add_argument("--proto-opts", type=str, help="Protocol options (0x00-0x03)")
     parser.add_argument("--shutdown-after", type=int, help="Shutdown after N seconds")
     parser.add_argument("--key", type=str, help="Hex-encoded shared key (64 hex chars for 32 bytes)")
+    parser.add_argument("--mesh", type=str, default="mesh", help="Mesh name for Keychain key lookup")
     args = parser.parse_args()
 
     # Generate GUID and key
     guid = GUIDFactory.generate()
 
-    # Use shared key if provided, otherwise generate random
-    if args.key:
-        key = bytes.fromhex(args.key)
-        if len(key) != 32:
-            logger.error("Key must be exactly 32 bytes (64 hex characters)")
-            sys.exit(1)
-    else:
-        # Default shared key for testing (matching Swift test key)
-        key = bytes.fromhex("D3046ECC8DD3242ADF62801A33EF1004003B01B4C8F558DF72E637DA30321CCD")
-        logger.info("Using default shared test key")
+    # Mesh key: --key > YX_KEY env > Keychain(--mesh) > dev key (warns).
+    # Mirrors Swift MeshKey.resolve (ADR D08 / key-management.md).
+    import sys as _sys, os as _os
+    _sys.path.insert(0, _os.path.dirname(_os.path.dirname(__file__)))
+    from yx_key import resolve_key
+    key, _src = resolve_key(args.key, getattr(args, "mesh", None) or "mesh")
+    logger.info(f"key source: {_src}")
+    if len(key) != 32:
+        logger.error("Key must be exactly 32 bytes (64 hex characters)")
+        sys.exit(1)
 
     # Create configuration
     config = YXConfiguration.default()

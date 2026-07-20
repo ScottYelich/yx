@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "Transport", targets: ["Transport"]),
         .library(name: "RPC", targets: ["RPC"]),
         .library(name: "YX", targets: ["YX"]),
+        .executable(name: "yxkey", targets: ["yxkey"]),
     ],
     targets: [
         // MARK: - Foundation Layer (no dependencies)
@@ -47,6 +48,14 @@ let package = Package(
             dependencies: ["Primitives", "Transport", "RPC"]
             // Top-level system coordination and re-exports
             // Provides: NetworkSystem, RPCSystem, Configuration, YX facade
+        ),
+
+        // MARK: - Executables
+
+        .executableTarget(
+            name: "yxkey",
+            dependencies: ["Primitives"]
+            // Mesh key manager (macOS Keychain). Spec: key-management.md
         ),
 
         // MARK: - Tests

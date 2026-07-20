@@ -41,12 +41,19 @@ struct CommandLineConfig {
         }
 
         let guid = GUIDFactory.generate()
-        let key = SymmetricKey(data: SHA256.hash(data: Data("shared-secret".utf8)))
 
         func argValue(_ name: String) -> String? {
             guard let i = args.firstIndex(of: name), i + 1 < args.count else { return nil }
             return args[i + 1]
         }
+
+        // Mesh key: --key hex > YX_KEY env > Keychain(--mesh) > dev key (warns).
+        // Spec: protocol/specs/architecture/key-management.md (ADR D08).
+        let (key, keySource) = MeshKey.resolve(
+            explicitHex: argValue("--key"),
+            mesh: argValue("--mesh") ?? MeshKey.defaultMesh
+        )
+        FileHandle.standardError.write(Data("🔑 key source: \(keySource.rawValue)\n".utf8))
 
         // Parse --port (default 50000)
         let listenPort = argValue("--port").flatMap { UInt16($0) } ?? 50000
