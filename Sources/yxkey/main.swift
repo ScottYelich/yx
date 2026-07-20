@@ -66,12 +66,17 @@ case "list":
     try? p.run()
     let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
     p.waitUntilExit()
-    var inYX = false; var meshes = Set<String>()
+    // Attributes are alphabetical, so "acct" precedes "svce" within an item.
+    // Capture the pending account; emit it when a matching "svce" line appears.
+    func quoted(_ s: Substring) -> String? {
+        guard let r = s.range(of: "=\"", options: .backwards), s.hasSuffix("\"") else { return nil }
+        return String(s[r.upperBound...].dropLast())
+    }
+    var meshes = Set<String>(); var pendingAcct: String? = nil
     for line in out.split(separator: "\n") {
-        if line.contains("\"svce\"") { inYX = line.contains(MeshKey.service) }
-        if inYX, line.contains("\"acct\""),
-           let r = line.range(of: "=\"", options: .backwards) {
-            meshes.insert(String(line[r.upperBound...].dropLast()))
+        if line.contains("\"acct\"<blob>=") { pendingAcct = quoted(line) }
+        if line.contains("\"svce\"<blob>=\"\(MeshKey.service)\""), let a = pendingAcct {
+            meshes.insert(a)
         }
     }
     if meshes.isEmpty { FileHandle.standardError.write(Data("no yx mesh keys stored\n".utf8)) }
