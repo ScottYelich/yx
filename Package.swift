@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "RPC", targets: ["RPC"]),
         .library(name: "YX", targets: ["YX"]),
         .executable(name: "yxkey", targets: ["yxkey"]),
+        .executable(name: "yxnode", targets: ["yxnode"]),
     ],
     targets: [
         // MARK: - Foundation Layer (no dependencies)
@@ -56,6 +57,12 @@ let package = Package(
             name: "yxkey",
             dependencies: ["Primitives"]
             // Mesh key manager (macOS Keychain). Spec: key-management.md
+        ),
+
+        .executableTarget(
+            name: "yxnode",
+            dependencies: ["YX", "Primitives"]
+            // Base mesh node daemon + canonical service example (ADR D09).
         ),
 
         // MARK: - Tests
