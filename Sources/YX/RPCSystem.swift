@@ -15,6 +15,9 @@ public actor RPCSystem {
     public let dispatcher: RPCDispatcher
     private let fallback: (@Sendable (String) async -> Void)?
 
+    /// S-expression car-dispatch table (Protocol-0 s-expr, ADR D11): head symbol → handler.
+    private var sexpHandlers: [String: @Sendable (SExpr) async -> Void] = [:]
+
     public init(onText fallback: (@Sendable (String) async -> Void)? = nil) {
         self.dispatcher = RPCDispatcher()
         self.fallback = fallback
@@ -28,8 +31,35 @@ public actor RPCSystem {
         await dispatcher.register(method, handler: handler)
     }
 
-    /// Handles incoming data - tries JSON-RPC first, then text fallback
+    /// Registers an S-expression handler for a car (head) symbol (ADR D11).
+    public func registerSexp(
+        _ head: String,
+        handler: @escaping @Sendable (SExpr) async -> Void
+    ) {
+        sexpHandlers[head] = handler
+    }
+
+    /// Handles incoming data.
+    /// Protocol-0 dispatch (ADR D11): peek the first non-whitespace byte —
+    /// `(` → S-expression, dispatch on the car symbol; `{` → legacy JSON-RPC path.
     public func handle(_ data: Data) async {
+        // S-expression path
+        let ws: Set<UInt8> = [0x20, 0x09, 0x0A, 0x0D]
+        if let first = data.first(where: { !ws.contains($0) }),
+           first == UInt8(ascii: "(") {
+            guard let text = String(data: data, encoding: .utf8),
+                  let expr = SExpr.parse(text),
+                  let head = expr.head else {
+                log("❓ RPCSystem: Malformed S-expression payload", level: .warning)
+                return
+            }
+            if let handler = sexpHandlers[head] {
+                await handler(expr)
+            } else {
+                log("❓ RPCSystem: No S-expr handler for '\(head)' — ignored", level: .debug)
+            }
+            return
+        }
         // Try JSON-RPC first
         // Accept both strict JSON-RPC 2.0 (with "jsonrpc": "2.0") and relaxed format (just needs "method")
         if let raw = try? JSONSerialization.jsonObject(with: data),

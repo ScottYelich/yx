@@ -117,6 +117,48 @@ public actor YX {
         log("📝 Registered RPC handler: \(method)", level: .info)
     }
 
+    /// Register an S-expression handler for a car (head) symbol (Protocol-0 s-expr, ADR D11)
+    ///
+    /// - Parameters:
+    ///   - head: The car symbol to dispatch on (e.g., "node-hello", "msg")
+    ///   - handler: Async function receiving the parsed S-expression
+    ///
+    /// Example:
+    /// ```swift
+    /// await yx.registerSexp("node-hello") { expr in
+    ///     print("hello from \(expr.field("node")?.stringValue ?? "?")")
+    /// }
+    /// ```
+    public func registerSexp(
+        _ head: String,
+        handler: @escaping @Sendable (SExpr) async -> Void
+    ) async {
+        await network.rpc.registerSexp(head, handler: handler)
+        log("📝 Registered S-expr handler: \(head)", level: .info)
+    }
+
+    /// Send an S-expression as a Protocol-0 text payload (ADR D11)
+    ///
+    /// - Parameters:
+    ///   - expr: The S-expression to send (serialized to its light canonical form)
+    ///   - host: Destination IP address (use "255.255.255.255" for broadcast)
+    ///   - port: Destination port
+    ///
+    /// Example:
+    /// ```swift
+    /// await yx.sendSexpr(
+    ///     .list([.sym("node-hello"), .list([.sym("node"), .str("colossus")])]),
+    ///     to: "192.168.1.100", port: 9720)
+    /// ```
+    public func sendSexpr(_ expr: SExpr, to host: String, port: UInt16) async {
+        let payload = Data(expr.serialize().utf8)
+
+        // Build packet with GUID and HMAC — same packet build path as sendText
+        let packet = UDPPacketUtils.build(guid: guid, bytesAfterGUID: payload, key: key)
+        network.networking.sendUDPPacket(packet, to: host, port: port)
+        log("📤 Sent s-expr to \(host):\(port)", level: .info)
+    }
+
     /// Send a text protocol message (JSON-RPC)
     ///
     /// - Parameters:

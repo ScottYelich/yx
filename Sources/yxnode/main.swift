@@ -5,7 +5,9 @@ import CryptoKit
 
 // yxnode — the base YX mesh node daemon (ADR D09; yx-message-bus design).
 // One long-lived process per machine: joins the mesh, heartbeats presence,
-// answers node.info, and lands inbound msg.deliver as Unified Node Format files.
+// answers node-info, and spools inbound (msg …) verbatim as .sxp files.
+// Speaks Protocol-0 S-expressions exclusively (ADR D11); the yx core still
+// accepts legacy JSON-RPC `{…}` payloads via the shim.
 // This is generic protocol infrastructure AND the canonical "how to build a
 // service on yx" example. Machine-specific reporting stays out — injected via args.
 
@@ -20,15 +22,17 @@ func flag(_ name: String) -> Bool { CommandLine.arguments.contains(name) }
 
 if flag("-h") || flag("--help") {
     print("""
-    yxnode — base YX mesh node daemon
+    yxnode — base YX mesh node daemon (Protocol-0 s-expr)
 
     USAGE: yxnode [--node ID] [--port N] [--peers h:p,h:p] [--mesh NAME]
                   [--agents a,b] [--heartbeat SEC] [--spool DIR]
                   [--broadcast IP] [--shutdown-after SEC]
+                  [--send-test TO --send-body TEXT]
 
     Defaults: node=hostname port=9720 mesh=agents heartbeat=5
               spool=~/ai/mail  broadcast=(none; use --peers on loopback)
     Key: resolved via MeshKey (--key > YX_KEY > Keychain(mesh) > dev key).
+    --send-test: send one (msg …) to TO via each peer, then exit (loopback proof).
     """)
     exit(0)
 }
@@ -71,7 +75,7 @@ actor Presence {
 }
 let presence = Presence()
 
-// MARK: - UNF spool write
+// MARK: - Mail spool (.sxp — the raw S-expression IS the message)
 
 /// Microsecond, sortable id = filename stem = msg-id.
 func unfID(_ date: Date = Date()) -> String {
@@ -81,37 +85,16 @@ func unfID(_ date: Date = Date()) -> String {
     return String(format: "%@%06d", f.string(from: date), usec)
 }
 
-/// Write one received message as a Unified Node Format markdown file.
-/// Returns the path, or nil on failure.
+/// Spool one received (msg …) verbatim as ~/ai/mail/YYYY/MM/<id>.sxp.
+/// Returns the path, or nil on failure. (message-format.md §Storage: never UNF/YAML.)
 @discardableResult
-func writeUNF(id: String, from: String, to: [String], type: String,
-              subject: String, refs: [String], body: String) -> String? {
-    let now = Date()
+func writeSxp(id: String, raw: String) -> String? {
     let f = DateFormatter(); f.dateFormat = "yyyy/MM"; f.timeZone = TimeZone.current
-    let dir = "\(spoolDir)/\(f.string(from: now))"
-    let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let toList = to.map { "\"\($0)\"" }.joined(separator: ", ")
-    let refList = refs.map { "\"\($0)\"" }.joined(separator: ", ")
-    let theme = type.split(separator: ".").first.map(String.init) ?? type
-    let doc = """
-    ---
-    id: "\(id)"
-    type: message
-    status: unread
-    source: yxbus
-    from: "\(from)"
-    to: [\(toList)]
-    subject: "\(subject)"
-    themes: [\(theme)]
-    refs: [\(refList)]
-    created: "\(iso.string(from: now))"
-    ---
-    \(body)
-    """
+    let dir = "\(spoolDir)/\(f.string(from: Date()))"
     do {
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        let path = "\(dir)/\(id).md"
-        try doc.write(toFile: path, atomically: true, encoding: .utf8)
+        let path = "\(dir)/\(id).sxp"
+        try raw.write(toFile: path, atomically: true, encoding: .utf8)
         return path
     } catch {
         FileHandle.standardError.write(Data("❌ spool write failed: \(error)\n".utf8))
@@ -128,55 +111,79 @@ p("📬 spool: \(spoolDir)")
 
 let yx = await YX(port: port, key: key)
 
-// node.hello — presence beacon (heartbeat + startup). Updates the directory.
-await yx.registerRPC("node.hello") { req in
-    let from = req.params["node"]?.stringValue ?? "?"
-    let ag = (req.params["agents"]?.stringValue ?? "").split(separator: ",").map(String.init)
+// node-hello — presence beacon (heartbeat + startup). Updates the directory.
+await yx.registerSexp("node-hello") { expr in
+    let from = expr.field("node")?.stringValue ?? "?"
+    let ag = (expr.field("agents")?.stringValue ?? "").split(separator: ",").map(String.init)
     if await presence.seen(from, agents: ag) {
         p("🟢 discovered node '\(from)' agents=\(ag)")
     }
 }
 
-// node.info — RPC query: reply with this node's identity + uptime + agents.
+// node-info — identity query. (Answering needs a sender address; Protocol-0 s-expr
+// carries none yet, so log receipt. A (node-info-reply …) goes out once the
+// receive path exposes the source endpoint.)
 let started = Date()
-await yx.registerRPC("node.info") { req in
+await yx.registerSexp("node-info") { _ in
     let up = Int(Date().timeIntervalSince(started))
-    req.reply(result: ["node": nodeID, "agents": agents, "uptime_s": up, "port": Int(port)])
-    p("📨 node.info answered for \(req.id ?? "-")")
+    p("📨 node-info received (node=\(nodeID) agents=\(agents.joined(separator: ",")) uptime=\(up)s)")
 }
 
-// msg.deliver — inbound agent message → land as a UNF file if addressed to a local agent.
-await yx.registerRPC("msg.deliver") { req in
-    let to = (req.params["to"]?.stringValue ?? "").split(separator: ",").map(String.init)
+// msg — inbound agent message → spool verbatim as .sxp if addressed to a local agent.
+await yx.registerSexp("msg") { expr in
+    let to = (expr.field("to")?.stringValue ?? "")
+        .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
     let localHit = to.contains("@all") || to.contains { t in
         agents.contains(t) || t == nodeID || t.hasPrefix("\(nodeID)/")
     }
-    guard localHit else { return }   // not for us; ignore (filtering, §4)
-    let givenID = req.params["id"]?.stringValue ?? ""
+    guard localHit else { return }   // not for us; ignore (filtering, message-format.md)
+    let givenID = expr.field("id")?.stringValue ?? ""
     let id = givenID.isEmpty ? unfID() : givenID
-    let path = writeUNF(
-        id: id,
-        from: req.params["from"]?.stringValue ?? "?",
-        to: to,
-        type: req.params["type"]?.stringValue ?? "note",
-        subject: req.params["subject"]?.stringValue ?? "",
-        refs: (req.params["refs"]?.stringValue ?? "").split(separator: ",").map(String.init),
-        body: req.params["body"]?.stringValue ?? "")
-    if let path { p("📥 delivered → \(path)") }
+    if let path = writeSxp(id: id, raw: expr.serialize()) {
+        p("📥 delivered → \(path)")
+    }
 }
 
 p("✅ yxnode up. peers=\(peers.map { "\($0.host):\($0.port)" })")
 
+// MARK: - Send-test (throwaway loopback proof: one (msg …) to each peer, then exit)
+
+if let testTo = arg("--send-test") {
+    let body = arg("--send-body") ?? "loopback test"
+    let iso = ISO8601DateFormatter()
+    try? await Task.sleep(nanoseconds: 500_000_000)   // let peers come up
+    let msg = SExpr.list([
+        .sym("msg"),
+        .list([.sym("v"), .num(1)]),
+        .list([.sym("id"), .str(unfID())]),
+        .list([.sym("type"), .sym("note")]),
+        .list([.sym("from"), .str(agents.first ?? "\(nodeID)/claude")]),
+        .list([.sym("to"), .str(testTo)]),
+        .list([.sym("created"), .str(iso.string(from: Date()))]),
+        .list([.sym("subject"), .str("send-test")]),
+        .list([.sym("body"), .str(body)]),
+    ])
+    for peer in peers { await yx.sendSexpr(msg, to: peer.host, port: peer.port) }
+    p("📤 send-test (msg …) → \(testTo) via \(peers.count) peer(s)")
+    try? await Task.sleep(nanoseconds: 1_000_000_000)  // let the send land
+    await yx.shutdown()
+    exit(0)
+}
+
+// MARK: - Heartbeat + keep-alive
+
 // Heartbeat: announce presence to explicit peers + optional broadcast every N sec.
 // Runs detached; the process is kept alive by the inline await below.
 let agentCSV = agents.joined(separator: ",")
-func hello() -> [String: Any] {
-    ["method": "node.hello", "params": ["node": nodeID, "agents": agentCSV]]
+func hello() -> SExpr {
+    .list([.sym("node-hello"),
+           .list([.sym("node"), .str(nodeID)]),
+           .list([.sym("agents"), .str(agentCSV)])])
 }
 let hbTask = Task {
     while !Task.isCancelled {
-        for peer in peers { await yx.sendText(hello(), to: peer.host, port: peer.port) }
-        if let b = broadcast { await yx.sendText(hello(), to: b, port: port) }
+        for peer in peers { await yx.sendSexpr(hello(), to: peer.host, port: peer.port) }
+        if let b = broadcast { await yx.sendSexpr(hello(), to: b, port: port) }
         try? await Task.sleep(nanoseconds: UInt64(heartbeat * 1_000_000_000))
     }
 }

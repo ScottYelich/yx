@@ -265,3 +265,41 @@ Concretely for yx:
   practical). New code follows this default from the start.
 - Composes with D08: optional `(key-id …)`/`(sig …)` fields slot into the grammar later
   for per-message signing without a schema break.
+
+## D12: Membership ≠ trust — Ed25519-signed authority over a flat trust store (2026-07-19)
+
+**Status:** Accepted. **Author:** Scott D. Yelich. **Context:** the mesh will include
+untrusted machines (e.g. a family member's malware-prone PC). Such a node can hold the
+shared mesh key (membership) yet must NOT be able to make trusted nodes execute anything.
+
+**Decision — two tiers, cleanly separated:**
+- **Membership** (join, send/receive chat, be seen) = the shared **HMAC mesh key**
+  (+ optional AES). Anyone on the bus has it. Membership proves "a mesh member sent an
+  unmodified packet" — it does NOT prove which member. Encrypted ≠ trusted.
+- **Authority** (a message that gets ACTED ON — run a command, place an order, anything
+  consequential) = a valid **Ed25519 signature** whose public key is in the receiver's
+  **flat trusted-signers store**. Chat is accepted from any member; authority is honored
+  ONLY from a trusted signer.
+
+**Rules:**
+- Enforce at the point of action: the executor of a consequential action verifies
+  `(sig)` over the canonical message bytes against a `(key-id)` in its trusted-signers
+  set BEFORE acting. Never trust the `from` field; `from` is a claim, the signature is truth.
+- Unsigned or untrusted-signed authority messages are received but REFUSED (logged; may be
+  answered with a `reject`). Informational messages need no signature.
+- **Flat trust store, not PKI.** No CAs/X.509/chains. A set of trusted Ed25519 pubkeys
+  (SSH `authorized_keys` style), distributed via the vault or a committed config; private
+  signing keys in the Keychain beside the mesh key (D08). Revoke = remove the pubkey;
+  eject a whole node = rotate the mesh key.
+- **Signing substrate:** the canonical S-expression form (D11) — Rivest csexp is built for
+  signing; JSON canonicalization (JCS) is a known pain. `(msg …)` canonicalizes
+  deterministically; sign those bytes with Ed25519.
+
+**Confidentiality caveat:** shared-key AES hides traffic from non-members, NOT from
+members — every mesh member (incl. an untrusted node) can decrypt. For "private from a
+specific member," use per-recipient (ECDH) encryption — a separate mechanism, deferred.
+Option for stronger isolation: put untrusted parties on a separate mesh key and bridge.
+
+**Now vs later:** ship membership (HMAC) + the message bus first; the `(key-id)`/`(sig)`
+slots are reserved in message-format.md so signing drops in without a schema break. Add
+signatures when authority-bearing messages become real (the sdts/trading path).
