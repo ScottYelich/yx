@@ -1,0 +1,183 @@
+(doc
+  (title "Architecture Decision Records — YX Protocol")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "System" "YX Protocol")
+  (kv "Version" "0.1.0")
+  (kv "Last Updated" "2026-04-11")
+  (para "This document records all significant architectural decisions made for the YX protocol. Each ADR captures the context, the decision, and the rationale.")
+  (section
+    (heading "D01 — UDP as Transport Layer")
+    (kv "Status" "Accepted")
+    (kv "Date" "2026-01-18")
+    (subsection
+      (heading "Context")
+      (para "YX needs a transport layer for distributed system communication. Options considered: TCP, UDP, Unix sockets, named pipes."))
+    (subsection
+      (heading "Decision")
+      (para "Use UDP exclusively. The protocol does not use TCP."))
+    (subsection
+      (heading "Rationale")
+      (item "UDP provides connectionless, low-latency delivery suitable for real-time distributed systems")
+      (item "The YX packet format (HMAC + GUID + payload) is self-contained; no connection state is needed")
+      (item "Broadcast support is native to UDP — required for peer discovery")
+      (item "Applications requiring reliability build it above the transport layer"))
+    (subsection
+      (heading "Consequences")
+      (para "Implementations must handle packet loss at the application layer. No TCP fallback is defined.")))
+  (section
+    (heading "D02 — HMAC-SHA256 Truncated to 16 Bytes")
+    (kv "Status" "Accepted")
+    (kv "Date" "2026-01-18")
+    (subsection
+      (heading "Context")
+      (para "Every packet requires authentication to prevent tampering. Full HMAC-SHA256 output is 32 bytes. Choices: 32 bytes, 16 bytes, shorter."))
+    (subsection
+      (heading "Decision")
+      (para "Compute HMAC-SHA256 over (GUID || PAYLOAD) and take the first 16 bytes."))
+    (subsection
+      (heading "Rationale")
+      (item "16 bytes (128 bits) provides 2^64 security against forgery (birthday bound)")
+      (item "Reduces packet overhead vs 32-byte HMAC")
+      (item "SHA-256 remains the strongest widely-deployed hash function; truncation is the standard approach (used in TLS, NIST SP 800-107)")
+      (item "All implementations must use the same truncation; no configurable length"))
+    (subsection
+      (heading "Consequences")
+      (para "The HMAC field is always exactly 16 bytes. Implementations must not use the full 32-byte output for comparison.")))
+  (section
+    (heading "D03 — Payload-Agnostic Transport Layer")
+    (kv "Status" "Accepted")
+    (kv "Date" "2026-01-18")
+    (subsection
+      (heading "Context")
+      (para "Should the transport layer understand or validate payload content?"))
+    (subsection
+      (heading "Decision")
+      (para "The transport layer treats payload as opaque bytes. It does not parse, validate, or interpret payload content."))
+    (subsection
+      (heading "Rationale")
+      (item "Enables multiplexing any protocol over the transport layer")
+      (item "Simplifies the transport implementation")
+      (item "Protocol 0 and Protocol 1 are defined at a layer above transport")
+      (item "A compromised key allows forged payloads — transport-layer payload validation provides no additional security"))
+    (subsection
+      (heading "Consequences")
+      (para "Applications that use the transport directly must implement their own payload validation. The Protocol 0/1 layers provide structured payload handling.")))
+  (section
+    (heading "D04 — 6-Byte GUID (Not UUID)")
+    (kv "Status" "Accepted")
+    (kv "Date" "2026-01-18")
+    (subsection
+      (heading "Context")
+      (para "Packets need unique identifiers for replay detection and correlation. Standard UUID (RFC 4122) is 16 bytes. Options: 4, 6, 8, 16 bytes."))
+    (subsection
+      (heading "Decision")
+      (para "Use 6-byte (48-bit) cryptographically-random GUIDs."))
+    (subsection
+      (heading "Rationale")
+      (item "6 bytes provides 2^48 ≈ 281 trillion unique values")
+      (item "Collision probability negligible for any realistic deployment")
+      (item "10 bytes smaller than UUID — significant savings at high packet rates")
+      (item "Cryptographic randomness ensures unpredictability for replay window matching")
+      (item "Simpler than UUID: no version bits, no variant bits, no timestamp encoding"))
+    (subsection
+      (heading "Consequences")
+      (para "GUIDs are not globally unique across all time and space (unlike UUID v4) but are practically unique for YX's use case. Do not use GUIDs as globally-unique identifiers outside of a YX session.")))
+  (section
+    (heading "D05 — Python as Reference Implementation / Canonical Artifact Generator")
+    (kv "Status" "Accepted")
+    (kv "Date" "2026-01-18")
+    (subsection
+      (heading "Context")
+      (para "Multiple language implementations must be wire-format compatible. A common test vector format is needed. Which language generates the canonical artifacts?"))
+    (subsection
+      (heading "Decision")
+      (para "Python is the reference implementation. It generates canonical test vectors and reference packets in `canonical/` that all other implementations validate against."))
+    (subsection
+      (heading "Rationale")
+      (item "Python implementation was first; it defines the correct wire format by construction")
+      (item "Python is widely readable and auditable")
+      (item "Canonical artifacts are language-agnostic JSON/binary — not Python-specific")
+      (item "Future implementations (Rust, Go, etc.) can validate without a Python runtime by loading pre-generated JSON"))
+    (subsection
+      (heading "Consequences")
+      (para "The Python implementation must be built and its canonical artifacts generated before any other implementation begins. Python implementation bugs that affect canonical artifacts require regenerating all artifacts and re-validating all implementations.")))
+  (section
+    (heading "D06 — Three-Layer Architecture (Transport / Protocol 0 / Protocol 1)")
+    (kv "Status" "Accepted")
+    (kv "Date" "2026-01-18")
+    (subsection
+      (heading "Context")
+      (para "Applications need different payload semantics: some want JSON/RPC-style text messages, others want binary efficiency with compression and encryption."))
+    (subsection
+      (heading "Decision")
+      (para "Define three layers: Transport (mandatory), Protocol 0 Text (optional), Protocol 1 Binary (optional). A 1-byte protocol identifier in the payload routes packets to the correct handler."))
+    (subsection
+      (heading "Rationale")
+      (item "Clean separation: raw transport for applications that want full control, structured layers for common patterns")
+      (item "The protocol byte in the payload is part of the payload spec, not the packet spec — transport layer remains truly agnostic")
+      (item "Extensible: Protocol 2+ can be added without changing the wire format"))
+    (subsection
+      (heading "Consequences")
+      (para "Implementations must implement the transport layer. Protocol 0 and Protocol 1 are defined as separate, optional handlers. All three are required for full feature parity per D04 (P4 — Multi-Language Parity).")))
+  (section
+    (heading "D07 — Replay Protection via TTL-Bounded Seen-GUID Store")
+    (kv "Status" "Accepted")
+    (kv "Date" "2026-01-18")
+    (subsection
+      (heading "Context")
+      (para "Attackers can replay captured valid packets. Detection mechanism needed."))
+    (subsection
+      (heading "Decision")
+      (para "Maintain an in-memory set of recently-seen GUIDs with a 300-second TTL. Packets with a GUID seen within the TTL window are rejected."))
+    (subsection
+      (heading "Rationale")
+      (item "Simple and effective against replay attacks")
+      (item "300-second window is long enough to handle clock skew and network delays")
+      (item "In-memory store is sufficient; persistence across restarts is not required (replays across restarts require a fresh HMAC key anyway)")
+      (item "TTL cleanup prevents unbounded memory growth"))
+    (subsection
+      (heading "Consequences")
+      (para "GUIDs must be cryptographically random (D04) to prevent GUID prediction attacks. The TTL is normative (300 seconds) — implementations must not use a shorter window.")))
+  (section
+    (heading "D08: Mesh keys live in the macOS Keychain, never in repos (2026-07-19)")
+    (para "**Decision:** HMAC mesh keys are stored in the login Keychain (`service org.spy.yx`, one account per mesh). Tools resolve: `--key` flag → `YX_KEY` env → Keychain → built-in dev key WITH loud warning. **Why:** the key IS mesh membership; the dev key is in public git history. **Consequence:** `yxkey` CLI (Swift) + `MeshKey` resolver in Primitives; python mirrors via `security` subprocess. Spec: key-management.sxp."))
+  (section
+    (heading "D09: Swift is the base implementation; Python is validation + edges (2026-07-19)")
+    (para "**Decision:** New YX code (node daemon, tools, services) is written in Swift, consumed via SPM (this repo is the package). The Python implementation is kept for wire-format parity validation and for the two Python-bound edges (ib_async bridge, MLX tooling) until they migrate. No pip distribution. **Why:** the surrounding ecosystem (murphy, dagsmith, agent, memory, mind) is Swift; single codesigned binaries beat interpreter/venv maintenance."))
+  (section
+    (heading "D10: Discovery is pluggable — UDP broadcast now, Bonjour later (2026-07-19)")
+    (para "**Decision:** Peer discovery v1 stays 255.255.255.255 broadcast (flat LAN). The node daemon treats discovery as a strategy so mDNS/Bonjour (NWBrowser / NetService) can be added without protocol changes. Discovery is NOT membership; the HMAC key remains the only trust boundary (D08)."))
+  (section
+    (heading "D11: S-expression is the canonical structured payload format (2026-07-19)")
+    (para "**Status:** Accepted. **Author:** Scott D. Yelich.")
+    (para "**Context.** yx Protocol 0 was defined as \"text / JSON-RPC\"; the node/message layer exchanged JSON objects (`{\"method\":…,\"params\":…}`) and briefly spooled messages as UNF (YAML-frontmatter + markdown). The surrounding ecosystem is s-expression native (ybs `.sbs`, `.sxp`, the portfolio data block, the FSMB message schema). JSON/JSONL repeatedly forces newline framing and full-document buffering to know when a value is complete.")
+    (para "**Decision — across the board.** Any payload richer than plaintext is an **S-expression, not JSON.** S-expression is the base/default structured format, and is **preferred even over plaintext when practical.** Preference order for a payload: **S-expression > plaintext > binary** — use the most structured form that fits; drop to plaintext only for opaque pass-through text, binary only for non-text.")
+    (para "Concretely for yx:")
+    (item "The message body is a single s-expression: `(msg …)` (see message-format spec).")
+    (item "Protocol 0's RPC/message layer migrates from JSON-RPC to s-expression forms **dispatched on the head symbol (car)**: `(node-hello …)`, `(node-info)`, `(msg …)`. The head atom is the verb; the rest are its arguments. No `{\"method\",\"params\"}` envelope.")
+    (item "On-disk representations are `.sxp` s-expressions — never YAML/JSON/markdown wrappers. **UNF is retired.**")
+    (para "**Rationale.**")
+    (item "**Always-known parse state.** Track paren depth; a form is complete exactly when depth returns to 0. Framing is self-delimiting and uniform — no length prefix, no JSONL convention, no \"read to a terminator you may not have received yet.\" Critical for a datagram protocol and for streaming agent output (vs. the JSONL buffering murphy needs).")
+    (item "**One grammar, uniform nesting** — structured data nests natively without escaping.")
+    (item "**Ecosystem consistency** — everything else already speaks s-expr; JSON was the outlier.")
+    (item "**Human-writable, no library required** — legible and hand-editable (FSMB-proven).")
+    (para "**Consequences.**")
+    (item "Protocol 0 is redefined: text = s-expression, dispatched on the car. Existing JSON-RPC handlers (`node.hello`/`node.info`/`msg.deliver`) get rewritten to s-expr forms; a transition shim MAY accept both briefly.")
+    (item "`yxnode` stops writing UNF; it carries and (if spooling) stores `(msg …)` as `.sxp`.")
+    (item "**JSON is confined to EXTERNAL edges** where a foreign contract requires it — the OpenAI-compatible LLM endpoints (mlx-router), MCP, third-party HTTP APIs. **Internal yx/agent payloads are never JSON.**")
+    (item "Forward-looking and where-feasible: not a mandate to rewrite every existing JSON emitter at once (e.g. murphy's JSONL event stream is an external-ish contract — migrate when practical). New code follows this default from the start.")
+    (item "Composes with D08: optional `(key-id …)`/`(sig …)` fields slot into the grammar later for per-message signing without a schema break."))
+  (section
+    (heading "D12: Membership ≠ trust — Ed25519-signed authority over a flat trust store (2026-07-19)")
+    (para "**Status:** Accepted. **Author:** Scott D. Yelich. **Context:** the mesh will include untrusted machines (e.g. a family member's malware-prone PC). Such a node can hold the shared mesh key (membership) yet must NOT be able to make trusted nodes execute anything.")
+    (para "**Decision — two tiers, cleanly separated:**")
+    (item "**Membership** (join, send/receive chat, be seen) = the shared **HMAC mesh key** (+ optional AES). Anyone on the bus has it. Membership proves \"a mesh member sent an unmodified packet\" — it does NOT prove which member. Encrypted ≠ trusted.")
+    (item "**Authority** (a message that gets ACTED ON — run a command, place an order, anything consequential) = a valid **Ed25519 signature** whose public key is in the receiver's **flat trusted-signers store**. Chat is accepted from any member; authority is honored ONLY from a trusted signer.")
+    (para "**Rules:**")
+    (item "Enforce at the point of action: the executor of a consequential action verifies `(sig)` over the canonical message bytes against a `(key-id)` in its trusted-signers set BEFORE acting. Never trust the `from` field; `from` is a claim, the signature is truth.")
+    (item "Unsigned or untrusted-signed authority messages are received but REFUSED (logged; may be answered with a `reject`). Informational messages need no signature.")
+    (item "**Flat trust store, not PKI.** No CAs/X.509/chains. A set of trusted Ed25519 pubkeys (SSH `authorized_keys` style), distributed via the vault or a committed config; private signing keys in the Keychain beside the mesh key (D08). Revoke = remove the pubkey; eject a whole node = rotate the mesh key.")
+    (item "**Signing substrate:** the canonical S-expression form (D11) — Rivest csexp is built for signing; JSON canonicalization (JCS) is a known pain. `(msg …)` canonicalizes deterministically; sign those bytes with Ed25519.")
+    (para "**Confidentiality caveat:** shared-key AES hides traffic from non-members, NOT from members — every mesh member (incl. an untrusted node) can decrypt. For \"private from a specific member,\" use per-recipient (ECDH) encryption — a separate mechanism, deferred. Option for stronger isolation: put untrusted parties on a separate mesh key and bridge.")
+    (para "**Now vs later:** ship membership (HMAC) + the message bus first; the `(key-id)`/`(sig)` slots are reserved in message-format.sxp so signing drops in without a schema break. Add signatures when authority-bearing messages become real (the sdts/trading path).")))

@@ -2,4 +2,4 @@
   (title "D11: S-expression is the canonical structured payload")
   (decision "Structured payloads are s-expr; car-dispatch; JSON only at external edges.")
   (rationale "Always-known parse state (paren depth = completeness); uniform nesting; ecosystem-native.")
-  (source "protocol/specs/architecture/ybs-decisions.md#D11"))
+  (source "protocol/specs/architecture/ybs-decisions.sxp#D11"))

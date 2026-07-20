@@ -1,0 +1,263 @@
+(doc
+  (title "Step 6: Packet Parser and Validator")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "Version" "0.1.0")
+  (section
+    (heading "Overview")
+    (para "Implement packet parsing that deserializes wire format and validates HMAC to ensure packet integrity."))
+  (section
+    (heading "What This Step Builds")
+    (para "Extends `PacketBuilder` with `parse_packet()` and `validate_hmac()` — converting raw bytes back into verified `Packet` objects, rejecting tampered or malformed packets."))
+  (section
+    (heading "Step Objectives")
+    (item "1. Parse packets from wire format")
+    (item "2. Validate HMAC before accepting packets")
+    (item "3. Handle invalid/corrupted packets gracefully")
+    (item "4. Comprehensive unit tests with 100% coverage"))
+  (section
+    (heading "Prerequisites")
+    (item "Step 5 completed (PacketBuilder implemented)"))
+  (section
+    (heading "Traceability")
+    (kv "Implements" "protocol/specs/technical/yx-protocol-spec.sxp § Packet Parsing/Validation")
+    (kv "References" "protocol/specs/testing/testing-strategy.sxp § Category 1: Unit Tests"))
+  (section
+    (heading "Instructions")
+    (subsection
+      (heading "Before Starting — Record Start Time")
+      (para "Record the current timestamp in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ` This is used for duration calculation in the DONE file."))
+    (subsection
+      (heading "1. Add Parser Methods to PacketBuilder")
+      (para "Update `src/yx/transport/packet_builder.py`:")
+      (code "# Add to existing file
+
+from ..primitives import validate_packet_hmac
+
+class PacketBuilder:
+    # ... existing methods ...
+
+    @staticmethod
+    def parse_packet(data: bytes) -> Optional[Packet]:
+        \"\"\"
+        Parse packet from wire format (no validation).
+
+        Args:
+            data: Raw packet bytes (minimum 22 bytes)
+
+        Returns:
+            Packet if parseable, None otherwise
+        \"\"\"
+        return Packet.from_bytes(data)
+
+    @staticmethod
+    def validate_hmac(packet: Packet, key: bytes) -> bool:
+        \"\"\"
+        Validate packet HMAC.
+
+        Args:
+            packet: Packet to validate
+            key: 32-byte symmetric key
+
+        Returns:
+            bool: True if HMAC is valid
+        \"\"\"
+        return validate_packet_hmac(packet.guid, packet.payload, key, packet.hmac)
+
+    @staticmethod
+    def parse_and_validate(data: bytes, key: bytes) -> Optional[Packet]:
+        \"\"\"
+        Parse packet and validate HMAC.
+
+        Args:
+            data: Raw packet bytes
+            key: 32-byte symmetric key
+
+        Returns:
+            Packet if valid, None if invalid/corrupted
+
+        Example:
+            >>> key = b'\\\\x00' * 32
+            >>> data = PacketBuilder.build_and_serialize(b'\\\\x01'*6, b'test', key)
+            >>> packet = PacketBuilder.parse_and_validate(data, key)
+            >>> packet.payload
+            b'test'
+        \"\"\"
+        packet = PacketBuilder.parse_packet(data)
+        if packet is None:
+            return None
+
+        if not PacketBuilder.validate_hmac(packet, key):
+            return None
+
+        return packet"))
+    (subsection
+      (heading "2. Create Unit Tests")
+      (para "Create `tests/unit/test_packet_parser.py`:")
+      (code "\"\"\"Unit tests for Packet Parser and Validator.\"\"\"
+
+import pytest
+from yx.transport import PacketBuilder, Packet
+
+
+class TestParsePacket:
+    \"\"\"Test packet parsing (no validation).\"\"\"
+
+    def test_parse_valid_packet(self):
+        \"\"\"Test parsing valid packet.\"\"\"
+        key = b'\\\\x00' * 32
+        data = PacketBuilder.build_and_serialize(b'\\\\x01'*6, b'test', key)
+
+        packet = PacketBuilder.parse_packet(data)
+
+        assert packet is not None
+        assert packet.payload == b'test'
+
+    def test_parse_packet_too_short(self):
+        \"\"\"Test that short data returns None.\"\"\"
+        packet = PacketBuilder.parse_packet(b'\\\\x00' * 21)
+        assert packet is None
+
+
+class TestValidateHMAC:
+    \"\"\"Test HMAC validation.\"\"\"
+
+    def test_validate_hmac_valid_packet(self):
+        \"\"\"Test validating packet with correct HMAC.\"\"\"
+        key = b'\\\\x00' * 32
+        packet = PacketBuilder.build_packet(b'\\\\x01'*6, b'test', key)
+
+        assert PacketBuilder.validate_hmac(packet, key) is True
+
+    def test_validate_hmac_invalid_packet(self):
+        \"\"\"Test validation fails with wrong HMAC.\"\"\"
+        key = b'\\\\x00' * 32
+        packet = Packet(hmac=b'\\\\xff'*16, guid=b'\\\\x01'*6, payload=b'test')
+
+        assert PacketBuilder.validate_hmac(packet, key) is False
+
+
+class TestParseAndValidate:
+    \"\"\"Test combined parsing and validation.\"\"\"
+
+    def test_parse_and_validate_valid_packet(self):
+        \"\"\"Test parsing and validating valid packet.\"\"\"
+        key = b'\\\\x00' * 32
+        data = PacketBuilder.build_and_serialize(b'\\\\x01'*6, b'test', key)
+
+        packet = PacketBuilder.parse_and_validate(data, key)
+
+        assert packet is not None
+        assert packet.payload == b'test'
+
+    def test_parse_and_validate_invalid_hmac(self):
+        \"\"\"Test that invalid HMAC returns None.\"\"\"
+        key = b'\\\\x00' * 32
+        # Build with one key, validate with another
+        data = PacketBuilder.build_and_serialize(b'\\\\x01'*6, b'test', b'\\\\xff'*32)
+
+        packet = PacketBuilder.parse_and_validate(data, key)
+
+        assert packet is None
+
+    def test_parse_and_validate_corrupted_data(self):
+        \"\"\"Test handling corrupted packet.\"\"\"
+        key = b'\\\\x00' * 32
+        data = PacketBuilder.build_and_serialize(b'\\\\x01'*6, b'test', key)
+
+        # Corrupt one byte in payload
+        corrupted = data[:23] + bytes([(data[23] ^ 0xFF)]) + data[24:]
+
+        packet = PacketBuilder.parse_and_validate(corrupted, key)
+
+        assert packet is None  # HMAC validation fails
+
+    def test_parse_and_validate_roundtrip(self):
+        \"\"\"Test full roundtrip: build → serialize → parse → validate.\"\"\"
+        key = b'\\\\x00' * 32
+        guid = b'\\\\xaa' * 6
+        payload = b'test payload data'
+
+        data = PacketBuilder.build_and_serialize(guid, payload, key)
+        packet = PacketBuilder.parse_and_validate(data, key)
+
+        assert packet is not None
+        assert packet.guid == guid
+        assert packet.payload == payload"))
+    (subsection
+      (heading "3. Run Tests")
+      (code "pytest tests/unit/test_packet_parser.py -v
+pytest tests/unit/test_packet_builder.py -v  # Rerun to ensure no regressions"))
+    (subsection
+      (heading "4. Check Coverage")
+      (code "pytest tests/unit/test_packet_parser.py tests/unit/test_packet_builder.py \\
+  --cov=src/yx/transport/packet_builder --cov-report=term-missing")))
+  (section
+    (heading "Verification")
+    (para "**This step is complete when:**")
+    (item "[ ] Parser methods added to PacketBuilder")
+    (item "[ ] All tests pass")
+    (item "[ ] Code coverage ≥ 100%")
+    (item "[ ] Invalid packets rejected")
+    (item "[ ] Corrupted packets detected")
+    (para "**Verification Commands:**")
+    (code "pytest tests/unit/test_packet_parser.py tests/unit/test_packet_builder.py -v
+
+python3 -c \"
+from yx.transport import PacketBuilder
+
+key = b'\\\\x00' * 32
+data = PacketBuilder.build_and_serialize(b'\\\\x01'*6, b'test', key)
+packet = PacketBuilder.parse_and_validate(data, key)
+assert packet is not None
+assert packet.payload == b'test'
+
+# Test invalid data
+invalid = PacketBuilder.parse_and_validate(data[:20], key)
+assert invalid is None
+
+print('✓ Packet parsing and validation verified')
+\""))
+  (section
+    (heading "Notes")
+    (item "Parsing and validation are separate for flexibility")
+    (item "parse_and_validate is the recommended API")
+    (item "Invalid packets return None (not exceptions)")
+    (item "HMAC validation prevents packet tampering"))
+  (section
+    (heading "Documentation")
+    (para "**Record end time** and calculate duration (end − start timestamp).")
+    (para "Create `docs/build-history/ybs-step_f6a1b2c3d4e5-DONE.txt`:")
+    (code "STEP ybs-step_f6a1b2c3d4e5: Packet Parser and Validator
+STARTED:    [start timestamp from Before Starting]
+COMPLETED:  [ISO 8601 timestamp]
+DURATION:   [minutes]
+
+OBJECTIVES COMPLETED:
+[copy from Step Objectives above]
+
+FILES CREATED/MODIFIED:
+- src/yx/transport/packet_builder.py (extended)
+- tests/unit/test_packet_parser.py
+
+VERIFICATION: PASSED (attempt [N])
+
+NEXT STEP: ybs-step_a2b3c4d5e6f7 (UDP Socket Configuration)")
+    (para "Update `BUILD_STATUS.sxp`: mark this step `[x]` and update **Last Updated** timestamp."))
+  (section
+    (heading "Success Criteria")
+    (para "This step is successful when:")
+    (item "1. All verification checks pass (within 3 attempts)")
+    (item "2. All required files exist and are valid")
+    (item "3. Build compiles/runs without errors")
+    (item "4. DONE file created in `docs/build-history/`")
+    (item "5. `BUILD_STATUS.sxp` updated"))
+  (section
+    (heading "Next Steps")
+    (para "After completing this step, proceed to:")
+    (kv "Next" "`ybs-step_a2b3c4d5e6f7` — UDP Socket Configuration"))
+  (section
+    (heading "Version History")
+    (subsection
+      (heading "0.1.0 (2026-04-11)")
+      (item "Initial step creation"))))

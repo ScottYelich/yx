@@ -1,0 +1,49 @@
+(doc
+  (title "Testing Specifications — Swift System-Wide Defaults")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "System" "YX Swift Implementation")
+  (kv "Category" "Testing")
+  (kv "Type" "BASE")
+  (kv "Version" "0.1.0")
+  (kv "Last Updated" "2026-04-11")
+  (section
+    (heading "Test Framework")
+    (kv "Framework" "`XCTest` (built into Swift Package Manager)")
+    (kv "Async support" "`async throws` test methods (Swift 5.5+)")
+    (kv "Coverage" "`swift test --enable-code-coverage`"))
+  (section
+    (heading "Test Organization")
+    (code "Tests/YXProtocolTests/
+├── Unit/           # One file per source type: <Type>Tests.swift
+└── Integration/    # End-to-end: <Feature>Tests.swift"))
+  (section
+    (heading "Running Tests")
+    (code "swift test                                         # All tests
+swift test --filter YXProtocolTests.Unit           # Unit only
+swift test --filter YXProtocolTests.Integration    # Integration only
+swift test --enable-code-coverage                  # With coverage"))
+  (section
+    (heading "Coverage Thresholds")
+    (para "Per the protocol testing BASE spec: overall ≥80%, critical paths 100%."))
+  (section
+    (heading "Async Test Pattern")
+    (code "func testSendReceive() async throws {
+    let socket = try UDPSocket(port: 0)
+    // ...
+}")
+    (para "XCTest natively supports `async throws` test methods in Swift 5.5+."))
+  (section
+    (heading "Deterministic Time in Tests")
+    (para "For replay protection and rate limiting tests, inject a clock dependency:")
+    (code "protocol Clock {
+    var now: TimeInterval { get }
+}
+
+struct MockClock: Clock {
+    var now: TimeInterval = 1000.0
+}")
+    (para "Pass the mock clock to the component under test rather than calling `Date()` directly."))
+  (section
+    (heading "Canonical Validation Tests")
+    (para "A separate test suite in `Integration/CanonicalValidationTests.swift` loads test vectors from `../../canonical/test-vectors/` and validates byte-for-byte compatibility with the Python implementation.")))

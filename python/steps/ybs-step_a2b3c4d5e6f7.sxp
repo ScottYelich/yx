@@ -1,0 +1,196 @@
+(doc
+  (title "Step 7: UDP Socket Configuration")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "Version" "0.1.0")
+  (section
+    (heading "Overview")
+    (para "Configure UDP socket with broadcast support for YX protocol communication."))
+  (section
+    (heading "What This Step Builds")
+    (para "Implements `UDPSocket` — the BSD socket wrapper configured for YX operation with broadcast mode, `SO_REUSEADDR`, and configurable timeouts in `src/yx/transport/udp_socket.py`."))
+  (section
+    (heading "Step Objectives")
+    (item "1. Create socket with SO_REUSEADDR, SO_REUSEPORT, SO_BROADCAST")
+    (item "2. Bind to all interfaces (0.0.0.0:port)")
+    (item "3. Test socket creation and configuration")
+    (item "4. 100% test coverage"))
+  (section
+    (heading "Prerequisites")
+    (item "Step 6 completed"))
+  (section
+    (heading "Traceability")
+    (kv "Implements" "protocol/specs/technical/yx-protocol-spec.sxp § UDP Socket Configuration"))
+  (section
+    (heading "Instructions")
+    (subsection
+      (heading "Before Starting — Record Start Time")
+      (para "Record the current timestamp in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ` This is used for duration calculation in the DONE file."))
+    (subsection
+      (heading "1. Create UDP Socket Module")
+      (para "Create `src/yx/transport/udp_socket.py`:")
+      (code "\"\"\"UDP Socket Configuration for YX Protocol.\"\"\"
+
+import socket
+from typing import Tuple
+
+
+class UDPSocket:
+    \"\"\"Configure and manage UDP socket for YX protocol.\"\"\"
+
+    def __init__(self, port: int = 50000):
+        \"\"\"
+        Initialize UDP socket.
+
+        Args:
+            port: Port to bind to (default: 50000)
+        \"\"\"
+        self.port = port
+        self.socket: socket.socket = None
+
+    def create_socket(self) -> socket.socket:
+        \"\"\"
+        Create and configure UDP socket.
+
+        Returns:
+            socket.socket: Configured UDP socket
+
+        Raises:
+            OSError: If socket creation fails
+        \"\"\"
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        # Allow address reuse
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        # Allow port reuse (multiple listeners on same port)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except AttributeError:
+            # SO_REUSEPORT not available on Windows
+            pass
+
+        # Enable broadcast
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
+        self.socket = sock
+        return sock
+
+    def bind(self):
+        \"\"\"Bind socket to all interfaces.\"\"\"
+        if self.socket is None:
+            self.create_socket()
+        self.socket.bind(('0.0.0.0', self.port))
+
+    def close(self):
+        \"\"\"Close socket.\"\"\"
+        if self.socket:
+            self.socket.close()
+            self.socket = None"))
+    (subsection
+      (heading "2. Update __init__.py")
+      (para "Update `src/yx/transport/__init__.py`:")
+      (code "from .packet import Packet
+from .packet_builder import PacketBuilder
+from .udp_socket import UDPSocket
+
+__all__ = [\"Packet\", \"PacketBuilder\", \"UDPSocket\"]"))
+    (subsection
+      (heading "3. Create Tests")
+      (para "Create `tests/unit/test_udp_socket.py`:")
+      (code "\"\"\"Unit tests for UDP Socket.\"\"\"
+
+import socket
+import pytest
+from yx.transport import UDPSocket
+
+
+class TestUDPSocket:
+    \"\"\"Test UDP socket configuration.\"\"\"
+
+    def test_create_socket(self):
+        \"\"\"Test socket creation.\"\"\"
+        udp = UDPSocket(port=50001)
+        sock = udp.create_socket()
+
+        assert sock is not None
+        assert sock.type == socket.SOCK_DGRAM
+
+        udp.close()
+
+    def test_bind_socket(self):
+        \"\"\"Test socket binding.\"\"\"
+        udp = UDPSocket(port=50002)
+        udp.bind()
+
+        # Socket should be bound
+        assert udp.socket is not None
+
+        udp.close()
+
+    def test_socket_has_broadcast(self):
+        \"\"\"Test that socket has broadcast enabled.\"\"\"
+        udp = UDPSocket(port=50003)
+        sock = udp.create_socket()
+
+        # Check SO_BROADCAST is set
+        broadcast = sock.getsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST)
+        assert broadcast == 1
+
+        udp.close()
+
+    def test_close_socket(self):
+        \"\"\"Test socket closing.\"\"\"
+        udp = UDPSocket(port=50004)
+        udp.create_socket()
+        udp.close()
+
+        assert udp.socket is None"))
+    (subsection
+      (heading "4. Run Tests")
+      (code "pytest tests/unit/test_udp_socket.py -v")))
+  (section
+    (heading "Verification")
+    (item "[ ] Socket creates successfully")
+    (item "[ ] SO_BROADCAST enabled")
+    (item "[ ] Binds to 0.0.0.0")
+    (item "[ ] Tests pass")
+    (code "pytest tests/unit/test_udp_socket.py -v
+python3 -c \"from yx.transport import UDPSocket; s = UDPSocket(); s.bind(); s.close(); print('✓ UDP socket verified')\""))
+  (section
+    (heading "Documentation")
+    (para "**Record end time** and calculate duration (end − start timestamp).")
+    (para "Create `docs/build-history/ybs-step_a2b3c4d5e6f7-DONE.txt`:")
+    (code "STEP ybs-step_a2b3c4d5e6f7: UDP Socket Configuration
+STARTED:    [start timestamp from Before Starting]
+COMPLETED:  [ISO 8601 timestamp]
+DURATION:   [minutes]
+
+OBJECTIVES COMPLETED:
+[copy from Step Objectives above]
+
+FILES CREATED/MODIFIED:
+- src/yx/transport/udp_socket.py
+- tests/unit/test_udp_socket.py
+
+VERIFICATION: PASSED (attempt [N])
+
+NEXT STEP: ybs-step_b3c4d5e6f7a2 (UDP Send and Receive)")
+    (para "Update `BUILD_STATUS.sxp`: mark this step `[x]` and update **Last Updated** timestamp."))
+  (section
+    (heading "Success Criteria")
+    (para "This step is successful when:")
+    (item "1. All verification checks pass (within 3 attempts)")
+    (item "2. All required files exist and are valid")
+    (item "3. Build compiles/runs without errors")
+    (item "4. DONE file created in `docs/build-history/`")
+    (item "5. `BUILD_STATUS.sxp` updated"))
+  (section
+    (heading "Next Steps")
+    (para "After completing this step, proceed to:")
+    (kv "Next" "`ybs-step_b3c4d5e6f7a2` — UDP Send and Receive"))
+  (section
+    (heading "Version History")
+    (subsection
+      (heading "0.1.0 (2026-04-11)")
+      (item "Initial step creation"))))

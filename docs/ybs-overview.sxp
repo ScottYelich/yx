@@ -1,0 +1,145 @@
+(doc
+  (title "YBS Framework Overview")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (section
+    (heading "What YBS Does")
+    (para "YBS (Yelich Build System) is a framework for building software systems with AI agents.")
+    (para "**Core principle:** Specifications are the source of truth. Code is generated from specs.")
+    (para "**Key features:**")
+    (item "AI agents build complete systems autonomously from written specifications")
+    (item "Zero interruptions after initial configuration")
+    (item "Full traceability: every line of code references its specification")
+    (item "Reproducible builds: same specs + same steps = identical output")
+    (item "Language and platform agnostic"))
+  (section
+    (heading "How It Works")
+    (subsection
+      (heading "1. Write Specifications (WHAT to build)")
+      (para "Create markdown files describing what the system should do:")
+      (code "specs/
+├── technical/           # Architecture, APIs, data models
+├── functional/          # Features, user workflows
+├── business/            # Requirements, success metrics
+└── testing/             # Test plans, acceptance criteria"))
+    (subsection
+      (heading "2. Write Build Steps (HOW to build it)")
+      (para "Create sequential build steps as markdown files:")
+      (code "steps/
+├── STEPS_ORDER.txt              # Execution order
+├── ybs-step_000000000000.md     # Step 0: Configuration (always first)
+├── ybs-step_<guid>.md           # Step 1: Project setup
+├── ybs-step_<guid>.md           # Step 2: Core implementation
+└── ...                          # More steps")
+      (para "Each step contains:")
+      (item "**Objectives** - What this step accomplishes")
+      (item "**Instructions** - Detailed commands and actions")
+      (item "**Verification** - How to verify the step succeeded"))
+    (subsection
+      (heading "3. Run Step 0 (Configuration)")
+      (para "Step 0 asks questions and creates `BUILD_CONFIG.json`:")
+      (code "{
+  \"values\": {
+    \"language\": \"Python\",
+    \"enable_tests\": true,
+    \"platform\": \"all\"
+  }
+}")
+      (para "This config file enables fully autonomous execution of all remaining steps."))
+    (subsection
+      (heading "4. AI Agent Executes Steps 1-N")
+      (para "For each step, the AI agent:")
+      (item "1. Reads the step file")
+      (item "2. Replaces configuration placeholders with values from BUILD_CONFIG.json")
+      (item "3. Executes instructions")
+      (item "4. Runs verification checks")
+      (item "5. Proceeds automatically to next step (no prompts)")))
+  (section
+    (heading "Directory Structure")
+    (code "system-name/
+├── README.sxp                    # System overview
+├── CLAUDE.md                    # AI agent instructions
+├── specs/                       # Specifications (WHAT)
+│   ├── technical/
+│   ├── functional/
+│   └── testing/
+├── steps/                       # Build steps (HOW)
+│   ├── STEPS_ORDER.txt
+│   ├── ybs-step_000000000000.md
+│   └── ybs-step_<guid>.md
+└── builds/                      # Build workspaces
+    └── build-name/
+        ├── BUILD_CONFIG.json    # Configuration values
+        ├── BUILD_STATUS.sxp      # Progress tracking
+        ├── [source code]        # Generated code
+        └── [tests]              # Generated tests"))
+  (section
+    (heading "How to Use YBS")
+    (subsection
+      (heading "As a Human")
+      (item "1. **Write specifications** describing what you want built")
+      (item "2. **Create build steps** describing how to build it")
+      (item "3. **Point an AI agent** at the system directory")
+      (item "4. **AI builds it autonomously** from your specs"))
+    (subsection
+      (heading "As an AI Agent")
+      (item "1. **Check for SESSION.md** in build directory (crash recovery)")
+      (item "2. **Execute Step 0** - Read BUILD_CONFIG.json or ask questions to create it")
+      (item "3. **Execute Steps 1-N sequentially:**")
+      (item "Read step file")
+      (item "Replace {{CONFIG:key}} with values")
+      (item "Execute instructions")
+      (item "Run verification")
+      (item "Proceed to next step")
+      (item "4. **Update status** in BUILD_STATUS.sxp after each step")
+      (item "5. **Mark complete** when all steps pass verification")))
+  (section
+    (heading "Key Concepts")
+    (subsection
+      (heading "Configuration-First Design")
+      (para "Step 0 collects ALL decisions upfront. Steps 1-N run without asking questions.")
+      (para "If BUILD_CONFIG.json exists, Step 0 skips all questions and loads existing config."))
+    (subsection
+      (heading "Verification-Driven Execution")
+      (para "Every step has explicit verification criteria:")
+      (item "Commands that must succeed")
+      (item "Files that must exist")
+      (item "Tests that must pass")
+      (item "Expected output patterns")
+      (para "AI agent verifies each step before proceeding."))
+    (subsection
+      (heading "Traceability")
+      (para "Every source file references its specification:")
+      (code "# Implements: calculator-spec.md § 2.1 (Core Operations)
+def add(a, b):
+    return a + b")
+      (para "This enables:")
+      (item "Understanding WHY code exists")
+      (item "Updating code when specs change")
+      (item "Regenerating code from specs"))
+    (subsection
+      (heading "Crash Recovery")
+      (para "SESSION.md tracks progress. If interrupted, AI agent resumes from last checkpoint.")))
+  (section
+    (heading "Example: Calculator System")
+    (para "**Specs:** Define a CLI calculator with add, subtract, multiply, divide operations")
+    (para "**Steps:**")
+    (item "Step 0: Collect configuration (language choice, enable tests)")
+    (item "Step 1: Create project structure")
+    (item "Step 2: Implement calculator module")
+    (item "Step 3: Implement parser module")
+    (item "Step 4: Implement CLI interface")
+    (item "Step 5-7: Write tests")
+    (item "Step 8: Write documentation")
+    (item "Step 9: Final verification")
+    (para "**Result:** Complete, tested, documented calculator in chosen language")
+    (para "**Time:** ~3 hours of autonomous AI execution"))
+  (section
+    (heading "Core Value")
+    (para "**Write specifications once. AI agents build complete systems autonomously, in any language, with full traceability and reproducibility.**")
+    (para "YBS separates \"what to build\" (specs) from \"how to build it\" (steps) from \"the built artifact\" (code).")
+    (para "This enables:")
+    (item "AI agents to build autonomously")
+    (item "Specs to remain current")
+    (item "Systems to be rebuilt in different languages")
+    (item "Code to be regenerated from specs at any time")))

@@ -1,0 +1,105 @@
+(doc
+  (title "System-Level Tests")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "This directory contains tests that span multiple YX implementations or require system-level validation.")
+  (section
+    (heading "Purpose")
+    (para "While each implementation (Python, Swift, etc.) has its own unit and integration tests in `builds/<impl>/tests/`, this directory contains tests that:")
+    (item "Validate cross-implementation compatibility")
+    (item "Test wire format consistency")
+    (item "Verify interoperability between languages")
+    (item "Perform system-level integration testing"))
+  (section
+    (heading "Directory Structure")
+    (subsection
+      (heading "interop/")
+      (para "Cross-implementation interoperability tests")
+      (para "**Purpose:** Verify that different language implementations can communicate")
+      (para "**Contents:**")
+      (item "`test-python-to-swift.sh` - Python sender → Swift receiver")
+      (item "`test-swift-to-python.sh` - Swift sender → Python receiver")
+      (item "`test-python-to-python.sh` - Python sender → Python receiver (baseline)")
+      (item "`test-swift-to-swift.sh` - Swift sender → Swift receiver (baseline)")
+      (item "`test-all-interop.sh` - Run all interop tests")
+      (item "Helper scripts and test data")
+      (para "**Test Flow Example:**")
+      (code "#!/bin/bash
+# test-python-to-swift.sh
+
+echo \"Starting Swift receiver...\"
+cd ../../builds/swift-impl
+swift run receiver --port 50001 &
+RECEIVER_PID=$!
+
+sleep 1
+
+echo \"Sending from Python...\"
+cd ../../builds/python-impl
+python3 -m sender --port 50001 --message '{\"method\":\"test\",\"params\":{}}'
+
+sleep 1
+
+echo \"Verifying reception...\"
+# Check logs, exit codes, etc.
+
+kill $RECEIVER_PID")))
+  (section
+    (heading "Running Tests")
+    (subsection
+      (heading "Prerequisites")
+      (item "Both Python and Swift implementations must be built")
+      (item "Implementations must be in `builds/python-impl/` and `builds/swift-impl/`")
+      (item "Canonical test vectors must exist in `canonical/test-vectors/`"))
+    (subsection
+      (heading "Run All Interop Tests")
+      (code "cd tests/interop
+./test-all-interop.sh"))
+    (subsection
+      (heading "Run Individual Test")
+      (code "cd tests/interop
+./test-python-to-swift.sh")))
+  (section
+    (heading "Test Requirements")
+    (para "Interop tests MUST verify:")
+    (item "1. **Message delivery:** Receiver gets exact message sent")
+    (item "2. **HMAC validation:** Packets pass HMAC check")
+    (item "3. **Payload parsing:** JSON/binary payload parsed correctly")
+    (item "4. **Round-trip:** Send → Receive → Process → Respond → Verify")
+    (item "5. **Protocol support:** Both Text (Protocol 0) and Binary (Protocol 1)"))
+  (section
+    (heading "Success Criteria")
+    (para "All interop tests MUST:")
+    (item "Exit with code 0 (success)")
+    (item "Log successful message exchange")
+    (item "Verify HMAC validation passed")
+    (item "Verify payload matches expected")
+    (item "Complete within timeout (10 seconds default)"))
+  (section
+    (heading "Failure Handling")
+    (para "If interop test fails:")
+    (item "1. Check implementation logs")
+    (item "2. Verify canonical test vectors pass for each implementation individually")
+    (item "3. Use packet capture (tcpdump) to inspect wire format")
+    (item "4. Compare HMAC computation between implementations")
+    (item "5. File issue with both implementations"))
+  (section
+    (heading "Adding New Interop Tests")
+    (para "When adding new test:")
+    (item "1. Create test script in `tests/interop/`")
+    (item "2. Follow naming convention: `test-<sender>-to-<receiver>.sh`")
+    (item "3. Include in `test-all-interop.sh`")
+    (item "4. Document test purpose in script header")
+    (item "5. Commit test script"))
+  (section
+    (heading "Performance Tests (Future)")
+    (para "Future additions may include:")
+    (item "`performance/` - Cross-implementation performance comparison")
+    (item "`stress/` - High-load system tests")
+    (item "`latency/` - Round-trip latency measurements"))
+  (section
+    (heading "Notes")
+    (item "These tests run AFTER all implementations are built")
+    (item "Tests assume implementations are in standard build directories")
+    (item "Tests may require network access (localhost UDP)")
+    (item "Tests are part of CI/CD validation (after all builds pass)")))

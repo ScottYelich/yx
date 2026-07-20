@@ -1,0 +1,184 @@
+(doc
+  (title "Step 10: Generate Canonical Artifacts")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "Version" "0.1.0")
+  (section
+    (heading "Overview")
+    (para "Generate canonical test vectors and reference packets that other language implementations will validate against."))
+  (section
+    (heading "What This Step Builds")
+    (para "Generates canonical test vectors — authoritative JSON files in `canonical/test-vectors/` that encode known inputs, expected HMAC values, and expected packet bytes for cross-language validation by Swift and future implementations."))
+  (section
+    (heading "Step Objectives")
+    (item "1. Generate text protocol test vectors")
+    (item "2. Generate binary protocol test vectors (future)")
+    (item "3. Generate reference packets")
+    (item "4. Export to canonical/ directory"))
+  (section
+    (heading "Prerequisites")
+    (item "Step 9 completed (all tests passing)"))
+  (section
+    (heading "Traceability")
+    (kv "Implements" "Canonical Artifacts workflow"))
+  (section
+    (heading "Instructions")
+    (subsection
+      (heading "Before Starting — Record Start Time")
+      (para "Record the current timestamp in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ` This is used for duration calculation in the DONE file."))
+    (subsection
+      (heading "1. Create Canonical Generator")
+      (para "Create `tests/generate_canonical.py`:")
+      (code "\"\"\"Generate canonical test vectors for cross-implementation validation.\"\"\"
+
+import json
+from pathlib import Path
+from yx.transport import PacketBuilder
+from yx.primitives import GUIDFactory
+
+
+def generate_test_vectors():
+    \"\"\"Generate JSON test vectors.\"\"\"
+    vectors = {
+        \"version\": \"1.0.0\",
+        \"protocol\": \"YX UDP Protocol\",
+        \"test_cases\": []
+    }
+
+    # Test case 1: Simple packet
+    key = b'\\\\x00' * 32
+    guid = b'\\\\x01' * 6
+    payload = b'test payload'
+
+    packet = PacketBuilder.build_packet(guid, payload, key)
+    data = packet.to_bytes()
+
+    vectors[\"test_cases\"].append({
+        \"name\": \"Simple text payload\",
+        \"guid\": guid.hex(),
+        \"key\": key.hex(),
+        \"payload\": payload.decode('ascii'),
+        \"payload_hex\": payload.hex(),
+        \"expected_hmac\": packet.hmac.hex(),
+        \"expected_packet\": data.hex(),
+    })
+
+    # Test case 2: Empty payload
+    payload2 = b''
+    packet2 = PacketBuilder.build_packet(guid, payload2, key)
+    data2 = packet2.to_bytes()
+
+    vectors[\"test_cases\"].append({
+        \"name\": \"Empty payload\",
+        \"guid\": guid.hex(),
+        \"key\": key.hex(),
+        \"payload\": \"\",
+        \"payload_hex\": \"\",
+        \"expected_hmac\": packet2.hmac.hex(),
+        \"expected_packet\": data2.hex(),
+    })
+
+    # Test case 3: Large payload
+    payload3 = b'X' * 1000
+    packet3 = PacketBuilder.build_packet(guid, payload3, key)
+    data3 = packet3.to_bytes()
+
+    vectors[\"test_cases\"].append({
+        \"name\": \"Large payload (1000 bytes)\",
+        \"guid\": guid.hex(),
+        \"key\": key.hex(),
+        \"payload_hex\": payload3.hex(),
+        \"expected_hmac\": packet3.hmac.hex(),
+        \"expected_packet\": data3.hex(),
+    })
+
+    return vectors
+
+
+def main():
+    \"\"\"Generate and save canonical artifacts.\"\"\"
+    # Ensure canonical directory exists
+    canonical_dir = Path(\"../../canonical/test-vectors\")
+    canonical_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate test vectors
+    vectors = generate_test_vectors()
+
+    # Save to JSON
+    output_file = canonical_dir / \"text-protocol-packets.json\"
+    with open(output_file, 'w') as f:
+        json.dump(vectors, f, indent=2)
+
+    print(f\"✓ Generated {len(vectors['test_cases'])} test vectors\")
+    print(f\"✓ Saved to {output_file}\")
+
+
+if __name__ == \"__main__\":
+    main()"))
+    (subsection
+      (heading "2. Run Generator")
+      (code "cd builds/python-impl
+python3 tests/generate_canonical.py"))
+    (subsection
+      (heading "3. Verify Canonical Artifacts")
+      (code "# Verify file exists
+test -f ../../canonical/test-vectors/text-protocol-packets.json && echo \"✓ Canonical artifacts generated\"
+
+# Verify JSON is valid
+python3 -m json.tool ../../canonical/test-vectors/text-protocol-packets.json > /dev/null && echo \"✓ JSON is valid\"
+
+# Count test cases
+python3 -c \"import json; data = json.load(open('../../canonical/test-vectors/text-protocol-packets.json')); print(f'✓ {len(data[\\\"test_cases\\\"])} test cases generated')\"")))
+  (section
+    (heading "Verification")
+    (item "[ ] Canonical artifacts generated")
+    (item "[ ] JSON is valid")
+    (item "[ ] At least 3 test cases")
+    (item "[ ] Files in ../../canonical/test-vectors/")
+    (code "cd builds/python-impl
+python3 tests/generate_canonical.py
+ls -lh ../../canonical/test-vectors/"))
+  (section
+    (heading "Notes")
+    (item "Python generates canonical artifacts (reference implementation)")
+    (item "Swift will validate against these artifacts")
+    (item "This ensures wire format compatibility")
+    (item "Test vectors enable cross-language validation"))
+  (section
+    (heading "Documentation")
+    (para "**Record end time** and calculate duration (end − start timestamp).")
+    (para "Create `docs/build-history/ybs-step_d5e6f7a2b3c4-DONE.txt`:")
+    (code "STEP ybs-step_d5e6f7a2b3c4: Generate Canonical Artifacts
+STARTED:    [start timestamp from Before Starting]
+COMPLETED:  [ISO 8601 timestamp]
+DURATION:   [minutes]
+
+OBJECTIVES COMPLETED:
+[copy from Step Objectives above]
+
+FILES CREATED/MODIFIED:
+- tests/generate_canonical.py
+- ../../canonical/test-vectors/hmac-test-vectors.json
+- ../../canonical/test-vectors/text-protocol-packets.json
+
+VERIFICATION: PASSED (attempt [N])
+
+NEXT STEP: ybs-step_g1h2i3j4k5l6 (Protocol 0 (Text/JSON-RPC))")
+    (para "Update `BUILD_STATUS.sxp`: mark this step `[x]` and update **Last Updated** timestamp."))
+  (section
+    (heading "Success Criteria")
+    (para "This step is successful when:")
+    (item "1. All verification checks pass (within 3 attempts)")
+    (item "2. All required files exist and are valid")
+    (item "3. Build compiles/runs without errors")
+    (item "4. DONE file created in `docs/build-history/`")
+    (item "5. `BUILD_STATUS.sxp` updated"))
+  (section
+    (heading "Next Steps")
+    (para "After completing this step, proceed to:")
+    (kv "Next" "`ybs-step_g1h2i3j4k5l6` — Protocol 0 (Text/JSON-RPC)"))
+  (section
+    (heading "Version History")
+    (subsection
+      (heading "0.1.0 (2026-04-11)")
+      (item "Initial step creation"))))

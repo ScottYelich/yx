@@ -1,0 +1,42 @@
+(doc
+  (title "YX Specifications")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "This directory contains the specifications that define WHAT the YX protocol is and does.")
+  (section
+    (heading "Specification Categories")
+    (subsection
+      (heading "technical/")
+      (para "Core technical specifications:")
+      (item "Protocol wire format")
+      (item "Security mechanisms")
+      (item "Transport layer")
+      (item "Message handling"))
+    (subsection
+      (heading "functional/")
+      (para "Functional specifications (to be created):")
+      (item "Use cases")
+      (item "User workflows")
+      (item "Integration patterns"))
+    (subsection
+      (heading "architecture/")
+      (para "Architectural decisions (to be created):")
+      (item "Design decisions")
+      (item "Trade-offs")
+      (item "Rationale"))
+    (subsection
+      (heading "testing/")
+      (para "Testing specifications (to be created):")
+      (item "Test plans")
+      (item "Acceptance criteria")
+      (item "Verification strategies")))
+  (section
+    (heading "Current Specifications")
+    (item "`technical/yx-protocol-spec.sxp` - Complete UDP protocol specification"))
+  (section
+    (heading "Adding Specifications")
+    (para "New specifications should:")
+    (item "Be written in markdown")
+    (item "Define WHAT, not HOW")
+    (item "Be implementation-agnostic")
+    (item "Be traceable from code")))

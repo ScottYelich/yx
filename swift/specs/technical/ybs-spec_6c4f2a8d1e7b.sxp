@@ -1,0 +1,132 @@
+(doc
+  (title "Specification: Swift Implementation Design")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "name: Swift Implementation Design description: Swift-specific module structure, CryptoKit usage, SPM configuration, concurrency model, and design decisions for the YX protocol implementation type: technical guid: 6c4f2a8d1e7b version: 0.1.0 status: Implemented last_updated: 2026-04-11")
+  (kv "GUID" "`6c4f2a8d1e7b`")
+  (kv "Version" "0.1.0")
+  (kv "Status" "Implemented")
+  (kv "Last Updated" "2026-04-11")
+  (section
+    (heading "Overview")
+    (para "Captures design decisions specific to the Swift implementation of the YX protocol. Records the *why* behind Swift-specific choices. Protocol requirements are in `../../../protocol/specs/`; this spec covers only what is Swift-specific."))
+  (section
+    (heading "Goals and Non-Goals")
+    (subsection
+      (heading "Goals")
+      (item "Document CryptoKit framework selection rationale")
+      (item "Record the Swift Package Manager target structure")
+      (item "Define concurrency model choices")
+      (item "Specify Swift version constraints")
+      (item "Document the UDP implementation approach (Network framework vs. BSD sockets)"))
+    (subsection
+      (heading "Non-Goals")
+      (item "Does not define the wire format")
+      (item "Does not define test coverage requirements (see `swift/specs/testing/`)")
+      (item "Does not prescribe the Python or other implementations")))
+  (section
+    (heading "Dependencies")
+    (subsection
+      (heading "System Frameworks (No Third-Party Dependencies)")
+      (table
+        (row "Framework" "Purpose")
+        (row "`CryptoKit`" "HMAC-SHA256, AES-256-GCM")
+        (row "`Network`" "UDP via NWConnection/NWListener")
+        (row "`Foundation`" "`Data`, `UUID`, `Date`")))
+    (subsection
+      (heading "Why `CryptoKit` and not alternatives")
+      (table
+        (row "Option" "Rejected Reason")
+        (row "CommonCrypto" "C-level API, not Swifty, harder constant-time guarantees")
+        (row "OpenSSL via SPM" "External dependency, compilation complexity, not needed")
+        (row "`swift-crypto` (open source)" "Third-party; CryptoKit is Apple-native and available on all Apple platforms")
+        (row "CryptoKit (chosen)" "Native, Swift-idiomatic, hardware-accelerated on Apple Silicon, constant-time by design")))
+    (subsection
+      (heading "Why `Network` framework and not BSD sockets")
+      (table
+        (row "Option" "Rejected Reason")
+        (row "POSIX `socket()` / `sendto()`" "Requires bridging to C, UnsafePointers, more boilerplate")
+        (row "`Network.NWConnection` (chosen)" "Swift-native API, async/await compatible, automatic path monitoring"))))
+  (section
+    (heading "Requirements")
+    (subsection
+      (heading "Functional Requirements")
+      (kv "FR-1" "Swift Package Manager Target Structure")
+      (kv "Description" "Package.swift defines library, test, and executable targets")
+      (kv "Priority" "High")
+      (item "**Acceptance Criteria**:")
+      (item "[ ] `YXProtocol` library target in `Sources/YXProtocol/`")
+      (item "[ ] `YXProtocolTests` test target in `Tests/YXProtocolTests/`")
+      (item "[ ] `SwiftSender` and `SwiftReceiver` executable targets for interop testing")
+      (item "[ ] No embedded Xcode project files")
+      (kv "FR-2" "Value-Typed Packet")
+      (kv "Description" "`Packet` is a Swift `struct`, not a `class`")
+      (kv "Priority" "High")
+      (item "**Acceptance Criteria**:")
+      (item "[ ] `struct Packet` with `hmac: Data`, `guid: Data`, `payload: Data`")
+      (item "[ ] Packet instances are passed by value (copy semantics)")
+      (item "[ ] `Packet` conforms to `Equatable` and `Sendable`")
+      (kv "FR-3" "CryptoKit HMAC Implementation")
+      (kv "Description" "HMAC uses `CryptoKit.HMAC<SHA256>`")
+      (kv "Priority" "Critical")
+      (item "**Acceptance Criteria**:")
+      (item "[ ] `HMAC<SHA256>.authenticationCode(for:using:)` used for computation")
+      (item "[ ] Result truncated to first 16 bytes")
+      (item "[ ] Comparison uses `HMAC.isValidAuthenticationCode(_:authenticating:using:)` for constant-time")
+      (kv "FR-4" "Actor-Based Shared State")
+      (kv "Description" "Replay window and rate limiter use Swift `actor`")
+      (kv "Priority" "High")
+      (item "**Acceptance Criteria**:")
+      (item "[ ] `actor ReplayWindow` for seen-GUID tracking")
+      (item "[ ] `actor RateLimiter` for per-sender request counting")
+      (item "[ ] No `@unchecked Sendable` workarounds — proper actor isolation")
+      (kv "FR-5" "Byte-Identical Output with Python")
+      (kv "Description" "For identical inputs, Swift and Python produce identical bytes")
+      (kv "Priority" "Critical")
+      (item "**Acceptance Criteria**:")
+      (item "[ ] All canonical test vectors pass (zero failures)")
+      (item "[ ] HMAC bytes identical to Python output")
+      (item "[ ] Packet serialization order identical: HMAC || GUID || PAYLOAD"))
+    (subsection
+      (heading "Non-Functional Requirements")
+      (kv "NFR-1" "Swift Version")
+      (kv "Description" "Implementation builds with Swift 5.9+")
+      (kv "Metric" "`swift --version`")
+      (kv "Target" "5.9 ≤ version")
+      (kv "NFR-2" "Zero Third-Party Dependencies")
+      (kv "Description" "`Package.swift` has no external package dependencies")
+      (kv "Metric" "`swift package show-dependencies`")
+      (kv "Target" "Zero external packages")
+      (kv "NFR-3" "Build Time")
+      (kv "Description" "Full build completes reasonably fast")
+      (kv "Metric" "`swift build` wall-clock time")
+      (kv "Target" "<60 seconds on Apple Silicon")))
+  (section
+    (heading "Architecture")
+    (subsection
+      (heading "Package Target Dependency Graph")
+      (code "SwiftSender (executable) ──┐
+                            ├──► YXProtocol (library)
+SwiftReceiver (executable) ─┘
+YXProtocolTests (test) ─────────► YXProtocol (library)"))
+    (subsection
+      (heading "Module Structure")
+      (code "Sources/YXProtocol/
+├── YXProtocol.swift         # Public API facade
+├── Primitives/
+│   ├── GUIDFactory.swift    # 6-byte GUID generation
+│   └── DataCrypto.swift     # HMAC-SHA256, AES-256-GCM
+└── Transport/
+    ├── Packet.swift         # Packet struct + serialization
+    ├── PacketBuilder.swift  # Build + parse packets
+    └── UDPSocket.swift      # NWConnection/NWListener wrapper")))
+  (section
+    (heading "Traceability")
+    (para "**Implements**:")
+    (item "`protocol/specs/technical/yx-protocol-spec.sxp` (full protocol)")
+    (item "`protocol/specs/architecture/ybs-decisions.sxp` D01 (UDP), D02 (HMAC), D04 (GUID)"))
+  (section
+    (heading "Version History")
+    (subsection
+      (heading "0.1.0 (2026-04-11)")
+      (item "Initial spec creation, documenting existing implementation decisions"))))

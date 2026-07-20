@@ -1,0 +1,594 @@
+(doc
+  (title "YX Network Protocol Specification v2.0")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "**Version:** 2.0.0 (Current Production Version) **Date:** 2025-10-19 **Status:** Production - Stable **Previous Version:** 1.0.0 (see `YX-PROTOCOL-SPEC.md`)")
+  (para "**Breaking Changes:** This version is NOT backward compatible with v1.0 binary protocol. See `MIGRATION-v1-to-v2.sxp` for upgrade guidance.")
+  (section
+    (heading "Table of Contents")
+    (item "1. [Overview](#overview)")
+    (item "2. [What's New in v2.0](#whats-new-in-v20)")
+    (item "3. [Packet Structure](#packet-structure)")
+    (item "4. [Protocol Detection](#protocol-detection)")
+    (item "5. [Protocol 0: Text/JSON](#protocol-0-textjson)")
+    (item "6. [Protocol 1: Binary/Chunked](#protocol-1-binarychunked)")
+    (item "7. [Security](#security)")
+    (item "8. [Message Flow](#message-flow)")
+    (item "9. [Implementation Notes](#implementation-notes)"))
+  (section
+    (heading "Overview")
+    (para "YX is a secure, peer-to-peer UDP networking protocol designed for high-performance distributed systems. It supports two protocols:")
+    (kv "Protocol 0 (Text)" "JSON-RPC 2.0 messages for simple RPC communication")
+    (kv "Protocol 1 (Binary)" "Chunked, optionally compressed/encrypted messages for large payloads")
+    (subsection
+      (heading "Key Features")
+      (kv "Packet Integrity" "HMAC-SHA256 authentication on every packet")
+      (kv "Peer Identification" "6-byte GUID per peer")
+      (kv "Dual Protocols" "Text (Protocol 0) and Binary (Protocol 1)")
+      (kv "Channel Isolation" "65,535 logical channels per connection (v2.0)")
+      (kv "Sequence Tracking" "4.3 billion messages per channel (v2.0)")
+      (kv "Chunking" "Automatic chunking for large messages (Protocol 1)")
+      (kv "Compression" "Optional zlib compression (Protocol 1)")
+      (kv "Encryption" "Optional AES-256-GCM encryption (Protocol 1)")
+      (kv "Message Reassembly" "Automatic reassembly with 60-second timeout")))
+  (section
+    (heading "What's New in v2.0")
+    (subsection
+      (heading "Header Redesign (Protocol 1 Only)")
+      (para "**v1.0 Header (16 bytes):**")
+      (code "[protoID(1)] + [protoOpts(1)] + [msgID(1)] + [meta(1)] + [chunkIndex(4)] + [totalChunks(4)] + [reserved(4)]")
+      (para "**v2.0 Header (16 bytes):**")
+      (code "[protoID(1)] + [protoOpts(1)] + [channelID(2)] + [sequence(4)] + [chunkIndex(4)] + [totalChunks(4)]"))
+    (subsection
+      (heading "Key Improvements")
+      (item "1. **Channel-Based Architecture**")
+      (item "**65,535 logical channels** (2-byte channelID) vs 256 message IDs")
+      (item "Independent sequence spaces per channel")
+      (item "Eliminates birthday paradox collision risk (was ~50% at 16 concurrent messages)")
+      (item "2. **Predictable Sequencing**")
+      (item "**4.3 billion messages per channel** (4-byte sequence) vs 256 IDs")
+      (item "Linear increment: 0, 1, 2, 3, ... (enables gap detection)")
+      (item "Duplicate detection via sequence tracking")
+      (item "3. **Massive Capacity**")
+      (kv "Total message space" "65K channels × 4.3B sequences = **280 trillion unique messages**")
+      (item "Per-channel flow control capability")
+      (item "Better debugging with predictable sequences"))
+    (subsection
+      (heading "Backward Compatibility")
+      (para "**Protocol 0 (Text):** ✅ **FULLY COMPATIBLE** - No changes **Protocol 1 (Binary):** ❌ **BREAKING CHANGE** - Header format changed")
+      (para "**Migration:** See `MIGRATION-v1-to-v2.sxp` for upgrade instructions.")))
+  (section
+    (heading "Packet Structure")
+    (subsection
+      (heading "Wire Format")
+      (para "All UDP packets follow this structure:")
+      (code "┌─────────────┬─────────────┬─────────────────────┐
+│  HMAC (16)  │  GUID (6)   │  Payload (variable) │
+└─────────────┴─────────────┴─────────────────────┘")
+      (kv "Total Minimum Size" "22 bytes (16 + 6)"))
+    (subsection
+      (heading "Field Descriptions")
+      (table
+        (row "Field" "Size (bytes)" "Type" "Description")
+        (row "HMAC" "16" "bytes" "HMAC-SHA256 of (GUID + Payload), truncated")
+        (row "GUID" "6" "bytes" "Unique peer identifier (zero-padded)")
+        (row "Payload" "variable" "bytes" "Protocol-specific data (Protocol 0 or 1)")))
+    (subsection
+      (heading "HMAC Computation")
+      (code "HMAC = HMAC-SHA256(key, GUID + Payload)[0:16]")
+      (kv "Algorithm" "HMAC-SHA256")
+      (kv "Input" "Concatenation of GUID (6 bytes) + Payload (variable)")
+      (kv "Key" "Shared symmetric key (32 bytes for AES-256)")
+      (kv "Output" "First 16 bytes of HMAC-SHA256 hash"))
+    (subsection
+      (heading "GUID Format")
+      (kv "Size" "6 bytes")
+      (kv "Generation" "Random bytes from secure RNG")
+      (kv "Padding" "If < 6 bytes, zero-padded on the right")
+      (kv "Encoding" "Raw bytes (not hex)")))
+  (section
+    (heading "Protocol Detection")
+    (para "The protocol is detected by examining the **first byte** of the payload:")
+    (code "if payload[0] < 32:
+    protocol = BINARY (Protocol 1)
+else:
+    protocol = TEXT (Protocol 0)")
+    (subsection
+      (heading "Rationale")
+      (kv "ASCII/JSON" "Valid JSON always starts with `{` (0x7B) or `[` (0x5B), both > 32")
+      (kv "Binary" "Protocol ID 0x01 is < 32, clearly distinguishes from text")))
+  (section
+    (heading "Protocol 0: Text/JSON")
+    (subsection
+      (heading "Purpose")
+      (para "Protocol 0 carries JSON-RPC 2.0 messages for simple, human-readable RPC calls."))
+    (subsection
+      (heading "Payload Format")
+      (code "┌──────────────────────────┐
+│  JSON String (UTF-8)     │
+└──────────────────────────┘")
+      (para "**No protocol ID byte** - detected by first character being ASCII (≥ 32)"))
+    (subsection
+      (heading "Example")
+      (subsection
+        (heading "Wire Format (after HMAC + GUID):")
+        (code "{\"method\":\"task.hello\",\"params\":{\"name\":\"Alice\"},\"id\":1}")))
+    (subsection
+      (heading "Encoding")
+      (kv "Character Encoding" "UTF-8")
+      (kv "JSON Format" "Standard JSON (RFC 8259)")
+      (kv "Whitespace" "Optional (compact recommended for UDP)"))
+    (subsection
+      (heading "Size Limits")
+      (kv "Maximum Payload" "~1472 bytes (UDP MTU - HMAC - GUID)")
+      (kv "Larger Messages" "Use Protocol 1 instead"))
+    (subsection
+      (heading "JSON-RPC 2.0 Format")
+      (code "{
+  \"method\": \"string\",       // Required: RPC method name
+  \"params\": object,         // Optional: Method parameters
+  \"id\": number | string     // Optional: Request ID (null for notifications)
+}")
+      (para "**No changes from v1.0** - Protocol 0 remains fully compatible.")))
+  (section
+    (heading "Protocol 1: Binary/Chunked")
+    (subsection
+      (heading "Purpose")
+      (para "Protocol 1 handles large payloads with optional compression and encryption. Messages are automatically chunked to fit UDP MTU. **v2.0 introduces channel-based architecture for stream isolation.**"))
+    (subsection
+      (heading "Payload Format")
+      (code "┌──────┬──────────┬───────────┬──────────┬────────────┬──────────────┬────────────┐
+│ 0x01 │ protoOpts│ channelID │ sequence │ chunkIndex │ totalChunks  │ chunk_data │
+│  (1) │    (1)   │    (2)    │    (4)   │     (4)    │      (4)     │ (variable) │
+└──────┴──────────┴───────────┴──────────┴────────────┴──────────────┴────────────┘")
+      (kv "Total Header Size" "16 bytes (unchanged from v1.0)"))
+    (subsection
+      (heading "Header Fields")
+      (table
+        (row "Field" "Offset" "Size" "Type" "Description")
+        (row "protoID" "0" "1" "uint8" "Protocol identifier (0x01 = binary)")
+        (row "protoOpts" "1" "1" "uint8" "Options bitfield (compression/encryption)")
+        (row "**channelID**" "2" "2" "uint16be" "**Logical channel (0-65535)** ⭐ NEW")
+        (row "**sequence**" "4" "4" "uint32be" "**Per-channel sequence (0-4.3B)** ⭐ NEW")
+        (row "chunkIndex" "8" "4" "uint32be" "Index of this chunk (0-based)")
+        (row "totalChunks" "12" "4" "uint32be" "Total number of chunks in message")
+        (row "chunk_data" "16" "var" "bytes" "Chunk payload"))
+      (para "**⭐ Changes from v1.0:**")
+      (kv "Removed" "`msgID` (1 byte), `meta` (1 byte), `reserved` (4 bytes)")
+      (kv "Added" "`channelID` (2 bytes), `sequence` (4 bytes)")
+      (kv "Total size" "Unchanged (16 bytes)"))
+    (subsection
+      (heading "Protocol Options Bitfield (protoOpts)")
+      (table
+        (row "Bit" "Mask" "Name" "Description")
+        (row "0" "0x01" "COMPRESS" "Compression enabled (zlib)")
+        (row "1" "0x02" "ENCRYPT" "Encryption enabled (AES-256-GCM)")
+        (row "2-7" "-" "Reserved" "Reserved for future use (set to 0)"))
+      (para "**Valid Combinations** (unchanged from v1.0):")
+      (item "`0x00`: No compression, no encryption")
+      (item "`0x01`: Compression only")
+      (item "`0x02`: Encryption only")
+      (item "`0x03`: Both compression and encryption"))
+    (subsection
+      (heading "Channel Allocation Guidelines")
+      (table
+        (row "Range" "Purpose")
+        (row "0" "System/control messages (ping, heartbeat)")
+        (row "1" "Default RPC channel (JSON-RPC 2.0)")
+        (row "2-99" "Reserved for framework")
+        (row "100-999" "Application-defined channels")
+        (row "1000-65535" "User-defined channels")))
+    (subsection
+      (heading "Sequence Numbering")
+      (kv "Per-channel" "Each channel maintains independent sequence counter")
+      (kv "Initial value" "0 for first message on channel")
+      (kv "Increment" "+1 for each message sent on that channel")
+      (kv "Wraparound" "Wraps at 2^32 (extremely unlikely with proper channel allocation)")
+      (item "**Uses**:")
+      (item "Message ordering")
+      (item "Gap detection (missing sequence numbers)")
+      (item "Duplicate detection")
+      (item "Nonce derivation for encryption"))
+    (subsection
+      (heading "Processing Order")
+      (subsection
+        (heading "Sending (Encode)")
+        (code "1. Original Data
+   ↓
+2. Compress (if 0x01 set)
+   ↓
+3. Encrypt (if 0x02 set)
+   ↓
+4. Chunk (split into ≤1024 byte chunks)
+   ↓
+5. Add headers to each chunk (same channelID + sequence for all chunks)
+   ↓
+6. Send chunks"))
+      (subsection
+        (heading "Receiving (Decode)")
+        (code "1. Receive chunks
+   ↓
+2. Buffer chunks by (channelID, sequence) tuple  ⭐ CHANGED from msgID
+   ↓
+3. Reassemble when all chunks received
+   ↓
+4. Decrypt (if 0x02 set)
+   ↓
+5. Decompress (if 0x01 set)
+   ↓
+6. Deliver complete data")))
+    (subsection
+      (heading "Chunking")
+      (kv "Default Chunk Size" "1024 bytes (configurable)")
+      (kv "Channel ID" "Application-defined logical channel (0-65535)")
+      (kv "Sequence Number" "Auto-incremented per channel")
+      (kv "Chunk Indexing" "0-based sequential integers")
+      (kv "Reassembly" "Chunks buffered by **(channelID, sequence)** tuple until complete"))
+    (subsection
+      (heading "Encryption (AES-256-GCM)")
+      (para "When `protoOpts & 0x02`:")
+      (code "┌────────────┬─────────────────┐
+│  Nonce(12) │  Ciphertext(var)│
+└────────────┴─────────────────┘")
+      (kv "Algorithm" "AES-256-GCM (Galois/Counter Mode)")
+      (kv "Key Size" "32 bytes (256 bits)")
+      (kv "Nonce Size" "12 bytes (random per message)")
+      (kv "Authentication" "Built into GCM mode")
+      (kv "Timing" "Encrypt BEFORE chunking, decrypt AFTER reassembly"))
+    (subsection
+      (heading "Compression (zlib)")
+      (para "When `protoOpts & 0x01`:")
+      (kv "Algorithm" "zlib (DEFLATE)")
+      (kv "Level" "Default compression level")
+      (kv "Timing" "Compress BEFORE encryption, decompress AFTER decryption"))
+    (subsection
+      (heading "Complete Example")
+      (subsection
+        (heading "Sending Multi-Channel Messages (v2.0)")
+        (code "# Send on channel 1 (default RPC)
+data_ch1 = b'{\"method\":\"task.hello\",\"params\":{\"name\":\"Alice\"}}'
+
+# Send on channel 100 (application data)
+data_ch100 = b'{\"method\":\"data.stream\",\"data\":\"sensor readings...\"}'
+
+# 1. Compress
+compressed_ch1 = zlib.compress(data_ch1)
+compressed_ch100 = zlib.compress(data_ch100)
+
+# 2. Encrypt
+nonce_ch1 = os.urandom(12)
+cipher_ch1 = AES.new(key, AES.MODE_GCM, nonce=nonce_ch1)
+ciphertext_ch1, _ = cipher_ch1.encrypt_and_digest(compressed_ch1)
+encrypted_ch1 = nonce_ch1 + ciphertext_ch1
+
+nonce_ch100 = os.urandom(12)
+cipher_ch100 = AES.new(key, AES.MODE_GCM, nonce=nonce_ch100)
+ciphertext_ch100, _ = cipher_ch100.encrypt_and_digest(compressed_ch100)
+encrypted_ch100 = nonce_ch100 + ciphertext_ch100
+
+# 3. Chunk (assume single chunk for both)
+chunks_ch1 = [encrypted_ch1]
+chunks_ch100 = [encrypted_ch100]
+
+# 4. Add headers
+# Channel 1, sequence 0 (first message on this channel)
+header_ch1 = struct.pack('>BBHIII',
+    0x01,           # protoID
+    0x03,           # protoOpts (compress + encrypt)
+    1,              # channelID = 1
+    0,              # sequence = 0 (first message)
+    0,              # chunkIndex = 0
+    1               # totalChunks = 1
+)
+
+# Channel 100, sequence 0 (first message on this channel)
+header_ch100 = struct.pack('>BBHIII',
+    0x01,           # protoID
+    0x03,           # protoOpts (compress + encrypt)
+    100,            # channelID = 100
+    0,              # sequence = 0 (first message)
+    0,              # chunkIndex = 0
+    1               # totalChunks = 1
+)
+
+payload_ch1 = header_ch1 + chunks_ch1[0]
+payload_ch100 = header_ch100 + chunks_ch100[0]
+
+# 5. Send both messages
+# Both messages can have sequence=0 because they're on different channels!"))
+      (subsection
+        (heading "Receiving (v2.0)")
+        (code "# 1. Receive packet, validate HMAC, extract payload
+
+# 2. Parse header
+protoID = payload[0]                                    # 0x01
+protoOpts = payload[1]                                  # 0x03
+channelID = unpack('>H', payload[2:4])[0]               # 1 or 100
+sequence = unpack('>I', payload[4:8])[0]                # 0
+chunkIndex = unpack('>I', payload[8:12])[0]             # 0
+totalChunks = unpack('>I', payload[12:16])[0]           # 1
+chunk_data = payload[16:]
+
+# 3. Buffer chunk by (channelID, sequence) tuple  ⭐ NEW
+buffer_key = (channelID, sequence)
+buffers[buffer_key][chunkIndex] = chunk_data
+
+# 4. Check complete
+if len(buffers[buffer_key]) == totalChunks:
+    # 5. Reassemble
+    complete = chunk_data  # Only 1 chunk
+
+    # 6. Decrypt (protoOpts & 0x02)
+    nonce = complete[:12]
+    ciphertext = complete[12:]
+    cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+    compressed = cipher.decrypt(ciphertext)
+
+    # 7. Decompress (protoOpts & 0x01)
+    data = zlib.decompress(compressed)
+
+    # 8. Parse JSON
+    message = json.loads(data)
+
+    # 9. Cleanup buffer
+    del buffers[buffer_key]")))
+    (subsection
+      (heading "Message Reassembly")
+      (para "**Buffer Management (v2.0):**")
+      (kv "Key" "**(channelID, sequence)** tuple ⭐ CHANGED from msgID")
+      (kv "Value" "Dictionary of {chunkIndex: chunk_data}")
+      (kv "Timeout" "60 seconds (stale buffers deleted)")
+      (kv "Completion" "When `len(chunks) == totalChunks`")
+      (para "**Benefits of (channelID, sequence) Key:**")
+      (item "No collision risk between channels")
+      (item "Can track gaps: missing sequence 5 on channel 1")
+      (item "Can detect duplicates: already processed sequence 10 on channel 2")
+      (item "Independent buffer spaces per channel")
+      (para "**Cleanup:**")
+      (code "# Periodic cleanup (every N seconds)
+now = time.time()
+for buffer_key, buffer in buffers.items():
+    if now - buffer.created_at > 60:
+        del buffers[buffer_key]  # Remove stale incomplete messages")))
+  (section
+    (heading "Security")
+    (subsection
+      (heading "HMAC Authentication")
+      (kv "Purpose" "Verify packet integrity and authenticity")
+      (para "**Calculation:**")
+      (code "data_to_hmac = GUID + Payload
+hmac_full = HMAC-SHA256(key, data_to_hmac)
+hmac_truncated = hmac_full[0:16]")
+      (para "**Verification:**")
+      (item "1. Extract HMAC from packet (first 16 bytes)")
+      (item "2. Recompute HMAC on GUID + Payload")
+      (item "3. Compare: `received_hmac == computed_hmac`")
+      (item "4. Reject if mismatch")
+      (para "**No changes from v1.0.**"))
+    (subsection
+      (heading "Encryption (AES-256-GCM)")
+      (kv "When" "Protocol 1 with `protoOpts & 0x02`")
+      (kv "Algorithm" "AES-256-GCM")
+      (kv "Mode" "Galois/Counter Mode (authenticated encryption)")
+      (kv "Key Size" "256 bits (32 bytes)")
+      (kv "Nonce" "12 bytes (96 bits), random per message")
+      (kv "Tag" "Embedded in GCM ciphertext (16 bytes)")
+      (para "**Nonce Generation:**")
+      (code "nonce = os.urandom(12)  # Cryptographically secure random")
+      (kv "CRITICAL" "Never reuse nonce with same key!")
+      (para "**Nonce Derivation (Optional Enhancement in v2.0):**")
+      (para "For deterministic nonce generation using channelID + sequence:")
+      (code "# Option: Derive nonce from channelID + sequence + timestamp
+nonce_material = struct.pack('>HIQ', channelID, sequence, timestamp_ns)
+nonce = HMAC-SHA256(key, nonce_material)[:12]")
+      (para "**No changes to core encryption from v1.0.**"))
+    (subsection
+      (heading "Key Management")
+      (para "**Shared Key:**")
+      (kv "Size" "32 bytes (256 bits)")
+      (kv "Generation" "Cryptographically secure random")
+      (kv "Distribution" "Out-of-band (pre-shared or key exchange)")
+      (kv "Storage" "Securely stored (environment variable, keychain, etc.)")
+      (para "**Test Key** (Development Only):")
+      (code "D3046ECC8DD3242ADF62801A33EF1004003B01B4C8F558DF72E637DA30321CCD")
+      (kv "WARNING" "Never use test key in production!")
+      (para "**No changes from v1.0.**"))
+    (subsection
+      (heading "Rate Limiting")
+      (kv "Protection" "DoS/flooding attacks")
+      (para "**Mechanism:**")
+      (item "Track request count per peer GUID")
+      (item "Sliding window (e.g., last 60 seconds)")
+      (item "Reject if rate exceeds threshold (e.g., 100 req/min)")
+      (kv "v2.0 Enhancement" "Can implement per-channel rate limiting")
+      (para "**No changes to core rate limiting from v1.0.**")))
+  (section
+    (heading "Message Flow")
+    (subsection
+      (heading "Multi-Channel Communication (v2.0 Example)")
+      (code "┌──────────┐                                  ┌──────────┐
+│ Client   │                                  │ Service  │
+└────┬─────┘                                  └────┬─────┘
+     │                                             │
+     │ 1. Send RPC on channel 1 (default RPC)      │
+     │    channelID=1, sequence=0                  │
+     │ ─────────────────────────────────────────> │
+     │                                             │
+     │ 2. Send data stream on channel 100          │
+     │    channelID=100, sequence=0                │
+     │ ─────────────────────────────────────────> │
+     │                                             │
+     │                                         3. Process both
+     │                                         4. Response on channel 1
+     │                                         5. Data on channel 100
+     │                                             │
+     │ <───── Response (ch=1, seq=0) ────────────  │
+     │ <───── Data (ch=100, seq=0) ───────────────  │
+     │                                             │
+     │ 6. Next RPC on channel 1                    │
+     │    channelID=1, sequence=1                  │
+     │ ─────────────────────────────────────────> │
+     │                                             │"))
+    (subsection
+      (heading "Large RPC Response (Protocol 1)")
+      (code "┌──────────┐                                  ┌──────────┐
+│ Client   │                                  │ Service  │
+└────┬─────┘                                  └────┬─────┘
+     │                                             │
+     │ 1. Send RPC request (Protocol 0)            │
+     │ ─────────────────────────────────────────> │
+     │                                             │
+     │                                         2. Process request
+     │                                         3. Large response (1647 bytes)
+     │                                         4. Compress (~600 bytes)
+     │                                         5. Chunk into 1 chunk
+     │                                         6. Add binary header
+     │                                            (channelID=1, sequence=5)
+     │                                             │
+     │ <───────── Chunk 1/1 ─────────────────────  │
+     │    [HMAC][GUID][0x01|0x01|ch=1|seq=5|0|1|compressed_data]
+     │                                             │
+     │ 7. Buffer chunk by (channelID=1, seq=5)     │
+     │ 8. Check complete (1/1)                     │
+     │ 9. Decompress                               │
+     │ 10. Parse JSON                              │
+     │ 11. Match request ID                        │
+     │ 12. Complete future                         │
+     │                                             │")))
+  (section
+    (heading "Implementation Notes")
+    (subsection
+      (heading "Protocol Detection")
+      (code "def detect_protocol(payload: bytes) -> int:
+    if not payload:
+        return None
+
+    first_byte = payload[0]
+
+    if first_byte < 32:
+        return PROTOCOL_BINARY  # 0x01
+    else:
+        return PROTOCOL_TEXT    # 0x00")
+      (para "**No changes from v1.0.**"))
+    (subsection
+      (heading "Sequence Management (v2.0)")
+      (para "**Per-Channel Sequence Counters:**")
+      (code "class BinaryProtocol:
+    def __init__(self):
+        self._sequences = {}  # {channelID: next_sequence}
+
+    async def send(self, payload, channel_id=1, proto_opts=0x00):
+        # Get next sequence for this channel
+        sequence = self._sequences.get(channel_id, 0)
+        self._sequences[channel_id] = (sequence + 1) % (2**32)
+
+        # Build header with channelID + sequence
+        header = struct.pack('>BBHIII',
+            0x01,           # protoID
+            proto_opts,     # protoOpts
+            channel_id,     # channelID (2 bytes)
+            sequence,       # sequence (4 bytes)
+            chunk_index,    # chunkIndex
+            total_chunks    # totalChunks
+        )
+        ..."))
+    (subsection
+      (heading "Buffer Key Management (v2.0)")
+      (para "**Old (v1.0):**")
+      (code "buffer_key = msgID  # Single byte (0-255)")
+      (para "**New (v2.0):**")
+      (code "buffer_key = (channelID, sequence)  # Tuple (channel, seq)")
+      (para "**Collision Probability:**")
+      (kv "v1.0" "50% at ~16 concurrent messages (birthday paradox)")
+      (kv "v2.0" "Effectively zero (280 trillion unique IDs)"))
+    (subsection
+      (heading "Chunking Strategy")
+      (para "**When to use Protocol 1:**")
+      (item "Payload > ~1400 bytes (approaching UDP MTU)")
+      (item "Need compression (reduce bandwidth)")
+      (item "Need encryption (confidentiality)")
+      (item "Need channel isolation (multiple logical streams)")
+      (para "**When to use Protocol 0:**")
+      (item "Small payloads (< 1400 bytes)")
+      (item "Human-readable debugging")
+      (item "Simple RPC calls")
+      (para "**No changes from v1.0.**"))
+    (subsection
+      (heading "UDP MTU Considerations")
+      (kv "Typical MTU" "1500 bytes (Ethernet)")
+      (para "**YX Overhead:**")
+      (item "HMAC: 16 bytes")
+      (item "GUID: 6 bytes")
+      (item "IP header: 20 bytes")
+      (item "UDP header: 8 bytes")
+      (kv "Total overhead" "50 bytes")
+      (kv "Available payload" "~1450 bytes")
+      (kv "Protocol 1 overhead" "16 bytes (header)")
+      (kv "Effective chunk data" "~1434 bytes")
+      (kv "Recommendation" "Use 1024-byte chunks for safety margin")
+      (para "**No changes from v1.0.**"))
+    (subsection
+      (heading "Broadcast vs Unicast")
+      (para "**Broadcast** (255.255.255.255):")
+      (item "All peers on network receive")
+      (item "Used for discovery, heartbeats, RPC (with SO_REUSEPORT)")
+      (para "**Unicast** (specific IP):")
+      (item "Only target peer receives")
+      (kv "WARNING" "Fails with SO_REUSEPORT (random socket delivery)")
+      (item "Only use if peers on different ports")
+      (kv "Rule" "Always use broadcast for YX RPC communication")
+      (para "**No changes from v1.0.**")))
+  (section
+    (heading "Appendix")
+    (subsection
+      (heading "Binary Protocol Header (C-style struct)")
+      (para "**v2.0:**")
+      (code "struct BinaryProtocolHeader {
+    uint8_t  protoID;       // 0x01 = Binary/Chunked
+    uint8_t  protoOpts;     // 0x00-0x03 (compress/encrypt flags)
+    uint16_t channelID;     // 0-65535 (logical channel) - BIG ENDIAN
+    uint32_t sequence;      // 0-4.3B (per-channel sequence) - BIG ENDIAN
+    uint32_t chunkIndex;    // 0-4.3B (chunk position) - BIG ENDIAN
+    uint32_t totalChunks;   // 0-4.3B (total chunks) - BIG ENDIAN
+} __attribute__((packed));")
+      (kv "Total Size" "16 bytes (1 + 1 + 2 + 4 + 4 + 4)"))
+    (subsection
+      (heading "Packet Example (Hex Dump)")
+      (para "**Protocol 0 (Text)** - No changes:")
+      (code "# Packet: {\"method\":\"ping\"}
+Offset  Hex                                          ASCII
+------  -------------------------------------------  ----------------
+0000    A1 B2 C3 D4 E5 F6 G7 H8 I9 J0 K1 L2 M3 N4  [HMAC............]
+0010    O5 P6 11 22 33 44 55 66                     [..][GUID......]
+0018    7B 22 6D 65 74 68 6F 64 22 3A 22 70 69 6E  {\"method\":\"pin
+0028    67 22 7D                                     g\"}")
+      (para "**Protocol 1 (Binary v2.0):**")
+      (code "# Packet: Single chunk, compressed, channel 42, sequence 10
+Offset  Hex                                          ASCII
+------  -------------------------------------------  ----------------
+0000    A1 B2 C3 D4 E5 F6 G7 H8 I9 J0 K1 L2 M3 N4  [HMAC............]
+0010    O5 P6 11 22 33 44 55 66                     [..][GUID......]
+0018    01 01                                        [protoID,opts]
+001A    00 2A                                        [channelID=42]
+001C    00 00 00 0A                                  [sequence=10]
+0020    00 00 00 00                                  [chunkIndex=0]
+0024    00 00 00 01                                  [totalChunks=1]
+0028    78 9C ... [compressed data]                  [zlib data...]"))
+    (subsection
+      (heading "Comparison: v1.0 vs v2.0")
+      (table
+        (row "Feature" "v1.0" "v2.0")
+        (row "Protocol 0 (Text)" "Unchanged" "Unchanged")
+        (row "Protocol 1 Header Size" "16 bytes" "16 bytes")
+        (row "Message ID Field" "msgID (1 byte)" "channelID (2 bytes) + sequence (4 bytes)")
+        (row "Unique Message IDs" "256" "280 trillion")
+        (row "Collision Risk" "~50% at 16 messages" "Effectively zero")
+        (row "Buffer Key" "msgID" "(channelID, sequence) tuple")
+        (row "Channel Isolation" "No" "Yes (65K channels)")
+        (row "Gap Detection" "No" "Yes (linear sequences)")
+        (row "Backward Compatible" "N/A" "Protocol 0: Yes, Protocol 1: No"))
+      (para "**End of Specification**")
+      (para "**Version:** 2.0.0 **Last Updated:** 2025-10-19 **Maintained by:** YX Development Team **See Also:**")
+      (item "`YX-PROTOCOL-SPEC.md` - v1.0 specification")
+      (item "`MIGRATION-v1-to-v2.sxp` - Migration guide")
+      (item "`YX-PROTOCOL-V2-WIP.md` - Development notes"))))

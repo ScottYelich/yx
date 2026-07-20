@@ -1,0 +1,298 @@
+(doc
+  (title "YX Protocol: Default Values Specification")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "**Version:** 1.0.0 **Date:** 2026-01-18 **Status:** Normative Specification **Traceability:** Gap 8.7, SDTS Issue #2")
+  (section
+    (heading "Overview")
+    (para "This specification defines all default values for the YX protocol. **Cross-language consistency is CRITICAL.** Mismatched defaults between implementations cause production failures.")
+    (para "**Golden Rule:** ALL implementations (Python, Swift, Rust, Go, etc.) MUST use identical default values unless explicitly overridden by user configuration."))
+  (section
+    (heading "Critical Historical Issue (SDTS Issue #2)")
+    (para "**Problem:** Swift v1.0.2 had `max_requests = 100`, Python had `max_requests = 10000`.")
+    (para "**Impact:** High-frequency trading systems blocked by Swift implementation. False positives in production.")
+    (para "**Time Lost:** 2 days debugging \"broken\" rate limiting.")
+    (para "**Root Cause:** Developer assumed \"100 requests/minute seems reasonable\" without checking Python implementation.")
+    (para "**Lesson:** Default values MUST be explicitly coordinated across implementations.")
+    (para "**Fix:** Changed Swift default to 10,000 to match Python. Documented requirement.")
+    (para "**Requirement:** ALL future implementations MUST use values in this specification."))
+  (section
+    (heading "Default Values Table")
+    (subsection
+      (heading "Transport Layer")
+      (table
+        (row "Parameter" "Default Value" "Type" "Unit" "Rationale")
+        (row "`udp_port`" "50000" "int" "port" "Application-layer default, avoid privileged ports")
+        (row "`broadcast_address`" "\"255.255.255.255\"" "string" "IP" "Universal broadcast address")
+        (row "`max_packet_size`" "4096" "int" "bytes" "Safe UDP maximum, well above typical MTU")
+        (row "`process_own_packets`" "true" "bool" "-" "Enable loopback testing by default")
+        (row "`bind_address`" "\"0.0.0.0\"" "string" "IP" "Listen on all interfaces"))
+      (para "**Socket Options (if supported):**")
+      (item "`SO_REUSEADDR`: Enabled")
+      (item "`SO_REUSEPORT`: Enabled (if OS supports)")
+      (item "`SO_BROADCAST`: Enabled"))
+    (subsection
+      (heading "Protocol 1 (Binary Protocol)")
+      (table
+        (row "Parameter" "Default Value" "Type" "Unit" "Rationale")
+        (row "`chunk_size`" "1024" "int" "bytes" "Optimal balance: MTU-safe + overhead")
+        (row "`buffer_timeout`" "60.0" "float" "seconds" "Incomplete message expiry (trade-off: memory vs reliability)")
+        (row "`compression_threshold`" "65536" "int" "bytes" "Auto-compress messages >64KB")
+        (row "`deduplication_window`" "5.0" "float" "seconds" "Prevent duplicate delivery (short window for memory)")
+        (row "`default_channel_id`" "0" "int" "-" "Default channel for simple use cases"))
+      (para "**Chunk Size Calculation:**")
+      (code "UDP MTU: 1500 bytes
+YX Header: 22 bytes (HMAC 16 + GUID 6)
+Protocol 1 Header: 16 bytes
+Overhead: 22 + 16 = 38 bytes
+Safe Chunk Data: 1500 - 38 - margin = 1024 bytes"))
+    (subsection
+      (heading "Security Configuration")
+      (table
+        (row "Parameter" "Default Value" "Type" "Unit" "Rationale")
+        (row "**HMAC**")
+        (row "`hmac_truncation`" "16" "int" "bytes" "128-bit security (adequate for integrity)")
+        (row "`hmac_algorithm`" "\"SHA256\"" "string" "-" "Industry standard, widely supported")
+        (row "**Rate Limiting**")
+        (row "`max_requests`" "**10000**" "int" "count" "**CRITICAL: High-frequency trading requirement**")
+        (row "`rate_limit_window`" "60.0" "float" "seconds" "Standard 1-minute window")
+        (row "`trusted_guids`" "[]" "list" "-" "Empty by default (no whitelisting)")
+        (row "**Replay Protection**")
+        (row "`replay_expiry`" "300.0" "float" "seconds" "5-minute window (balance: security vs memory)")
+        (row "`replay_cleanup_threshold`" "100" "int" "count" "Trigger cleanup after N entries")
+        (row "**Encryption (Protocol 1)**")
+        (row "`aes_key_size`" "32" "int" "bytes" "256-bit AES (strong security)")
+        (row "`aes_nonce_size`" "12" "int" "bytes" "96-bit GCM nonce (standard)")
+        (row "`aes_tag_size`" "16" "int" "bytes" "128-bit authentication tag")
+        (row "**Compression (Protocol 1)**")
+        (row "`compression_level`" "6" "int" "0-9" "Balanced speed/ratio (zlib default)")
+        (row "`compression_format`" "\"deflate\"" "string" "-" "Raw DEFLATE for Apple compatibility")))
+    (subsection
+      (heading "Test Configuration")
+      (table
+        (row "Parameter" "Default Value" "Type" "Unit" "Rationale")
+        (row "`test_port`" "49999" "int" "port" "Avoid conflict with default port (50000)")
+        (row "`test_timeout`" "5.0" "float" "seconds" "Test receiver timeout")
+        (row "`test_key`" "32 bytes of 0x00" "bytes" "-" "Fixed key for reproducible tests")
+        (row "`test_guid`" "6 bytes of 0x01" "bytes" "-" "Fixed GUID for reproducible tests")))
+    (subsection
+      (heading "Logging Configuration")
+      (table
+        (row "Parameter" "Default Value" "Type" "Unit" "Rationale")
+        (row "`log_level`" "\"INFO\"" "string" "-" "Production default (not DEBUG)")
+        (row "`log_format`" "\"emoji\"" "string" "-" "Human-readable with icons")
+        (row "`enable_forensics`" "true" "bool" "-" "Log failed HMACs to /tmp")
+        (row "`forensics_log_path`" "\"/tmp/hmac_failures.log\"" "string" "path" "Standard temp location"))))
+  (section
+    (heading "Cross-Language Validation Requirements")
+    (subsection
+      (heading "Validation Procedure")
+      (para "Before ANY implementation can be marked \"production ready,\" it MUST:")
+      (item "1. **Document Defaults:**")
+      (item "List all default values in README or documentation")
+      (item "Reference this specification")
+      (item "Highlight any intentional deviations")
+      (item "2. **Validate Against Spec:**")
+      (item "Create test that reads default values from code")
+      (item "Compare against this specification")
+      (item "Fail if any mismatch detected")
+      (item "3. **Cross-Language Test:**")
+      (item "Run interop tests with default configurations")
+      (item "No explicit configuration overrides")
+      (item "Must pass 48/48 tests"))
+    (subsection
+      (heading "Validation Test Template")
+      (para "**Python:**")
+      (code "def test_default_values_match_spec():
+    \"\"\"Validate all defaults match specification.\"\"\"
+    assert Configuration.default().network.udp_port == 50000
+    assert Configuration.default().security.max_requests == 10000  # CRITICAL!
+    assert Configuration.default().security.rate_limit_window == 60.0
+    assert Configuration.default().security.replay_expiry == 300.0
+    assert Configuration.default().protocol.chunk_size == 1024
+    # ... all other defaults")
+      (para "**Swift:**")
+      (code "func testDefaultValuesMatchSpec() throws {
+    let config = Configuration.default()
+    XCTAssertEqual(config.network.udpPort, 50000)
+    XCTAssertEqual(config.security.maxRequests, 10000)  // CRITICAL!
+    XCTAssertEqual(config.security.rateLimitWindow, 60.0)
+    XCTAssertEqual(config.security.replayExpiry, 300.0)
+    XCTAssertEqual(config.protocol.chunkSize, 1024)
+    // ... all other defaults
+}")))
+  (section
+    (heading "Configuration Override Patterns")
+    (subsection
+      (heading "Environment Variables (Recommended)")
+      (para "Allow users to override defaults via environment variables:")
+      (table
+        (row "Environment Variable" "Overrides" "Example")
+        (row "`YX_UDP_PORT`" "udp_port" "`YX_UDP_PORT=9999`")
+        (row "`YX_MAX_REQUESTS`" "max_requests" "`YX_MAX_REQUESTS=50000`")
+        (row "`YX_RATE_WINDOW`" "rate_limit_window" "`YX_RATE_WINDOW=120`")
+        (row "`YX_REPLAY_EXPIRY`" "replay_expiry" "`YX_REPLAY_EXPIRY=600`")
+        (row "`YX_CHUNK_SIZE`" "chunk_size" "`YX_CHUNK_SIZE=2048`")
+        (row "`YX_LOG_LEVEL`" "log_level" "`YX_LOG_LEVEL=DEBUG`")
+        (row "`TEST_YX_PORT`" "test_port" "`TEST_YX_PORT=49998`")))
+    (subsection
+      (heading "Configuration Files")
+      (para "**Python (YAML example):**")
+      (code "network:
+  udp_port: 50000
+  broadcast_address: \"255.255.255.255\"
+
+security:
+  max_requests: 10000
+  rate_limit_window: 60.0
+  replay_expiry: 300.0
+
+protocol:
+  chunk_size: 1024
+  buffer_timeout: 60.0")
+      (para "**Swift (Plist example):**")
+      (code "<dict>
+    <key>network</key>
+    <dict>
+        <key>udpPort</key>
+        <integer>50000</integer>
+    </dict>
+    <key>security</key>
+    <dict>
+        <key>maxRequests</key>
+        <integer>10000</integer>
+    </dict>
+</dict>"))
+    (subsection
+      (heading "Programmatic Configuration")
+      (para "**Python:**")
+      (code "from yx import YXConfiguration, NetworkConfig, SecurityConfig
+
+config = YXConfiguration(
+    network=NetworkConfig(udp_port=9999),
+    security=SecurityConfig(max_requests=50000)
+)
+
+yx = YX(config=config)")
+      (para "**Swift:**")
+      (code "var config = Configuration.default()
+config.network.udpPort = 9999
+config.security.maxRequests = 50000
+
+let yx = YX(configuration: config)")))
+  (section
+    (heading "Common Pitfalls and Anti-Patterns")
+    (subsection
+      (heading "❌ Anti-Pattern 1: Different Defaults")
+      (para "**WRONG:**")
+      (code "# Python
+rate_limiter = RateLimiter(max_requests=10000)
+
+# Swift
+let rateLimiter = RateLimiter(maxRequests: 100)  // ❌ MISMATCH!")
+      (para "**Impact:** Python → Swift communication blocked by rate limiter false positives.")
+      (para "**Fix:** Use identical defaults from this specification."))
+    (subsection
+      (heading "❌ Anti-Pattern 2: Hardcoded Values")
+      (para "**WRONG:**")
+      (code "# Hardcoded in multiple places
+socket.bind((\"0.0.0.0\", 50000))
+rate_limiter = RateLimiter(max_requests=10000)
+replay = ReplayProtection(max_age=300)")
+      (para "**Problem:** Changes require updating multiple locations. Risk of inconsistency.")
+      (para "**FIX:**")
+      (code "# Centralized configuration
+config = YXConfiguration.default()
+socket.bind((config.network.bind_address, config.network.udp_port))
+rate_limiter = RateLimiter(max_requests=config.security.max_requests)
+replay = ReplayProtection(max_age=config.security.replay_expiry)"))
+    (subsection
+      (heading "❌ Anti-Pattern 3: No Default Validation")
+      (para "**WRONG:**")
+      (code "# No validation that defaults match spec
+# Risk of drift over time")
+      (para "**FIX:**")
+      (code "# Test that validates defaults
+def test_defaults_match_spec():
+    \"\"\"Ensure defaults haven't drifted from specification.\"\"\"
+    # ... validation code"))
+    (subsection
+      (heading "❌ Anti-Pattern 4: Assuming \"Reasonable\" Defaults")
+      (para "**WRONG:**")
+      (code "// Developer thinks: \"100 requests/minute sounds reasonable\"
+let rateLimiter = RateLimiter(maxRequests: 100)")
+      (para "**Problem:** Assumption doesn't match other implementations or requirements.")
+      (para "**FIX:** Always check specification, never assume.")))
+  (section
+    (heading "Default Value Rationale")
+    (subsection
+      (heading "Why `max_requests = 10000` (not 100)?")
+      (para "**Context:** High-frequency trading systems.")
+      (para "**Requirement:** Market data updates can arrive at 1000+ updates/second during volatile periods.")
+      (para "**Calculation:**")
+      (item "Peak rate: 1000 packets/second")
+      (item "Window: 60 seconds")
+      (item "Required capacity: 60,000 req/60s")
+      (para "**Conservative Default:** 10,000 req/60s allows:")
+      (item "166 req/second sustained")
+      (item "Handles normal operation comfortably")
+      (item "Not too permissive (still provides DDoS protection)")
+      (para "**Why NOT 100:** Would allow only 1.6 req/second (insufficient for real-time data)."))
+    (subsection
+      (heading "Why `replay_expiry = 300` seconds (not 60)?")
+      (para "**Context:** Network delays, clock skew, retransmissions.")
+      (para "**Calculation:**")
+      (item "Typical retransmission delay: 1-5 seconds")
+      (item "Clock skew between systems: up to 10 seconds")
+      (item "Safety margin: 5x = 50 seconds")
+      (item "Round up: 300 seconds (5 minutes)")
+      (para "**Trade-off:**")
+      (item "Shorter window (e.g., 60s): Better security, higher memory, more false positives")
+      (item "Longer window (e.g., 600s): Worse security, lower memory, fewer false positives")
+      (para "**Conservative Default:** 300 seconds balances security and reliability."))
+    (subsection
+      (heading "Why `chunk_size = 1024` bytes (not 1400)?")
+      (para "**Context:** UDP MTU is typically 1500 bytes.")
+      (para "**Calculation:**")
+      (item "UDP MTU: 1500 bytes")
+      (item "IP header: ~20 bytes")
+      (item "UDP header: 8 bytes")
+      (item "YX header: 22 bytes (HMAC + GUID)")
+      (item "Protocol 1 header: 16 bytes")
+      (item "Total overhead: ~66 bytes")
+      (item "Safe payload: 1500 - 66 = 1434 bytes")
+      (para "**Why NOT 1400:** Closer to MTU, but:")
+      (item "Some networks have lower MTU (1400, 1280)")
+      (item "VPN/tunnel overhead")
+      (item "IP fragmentation issues")
+      (para "**Conservative Default:** 1024 bytes provides margin for all scenarios.")))
+  (section
+    (heading "Verification Checklist")
+    (subsection
+      (heading "Implementation Checklist")
+      (item "[ ] All defaults documented in code comments")
+      (item "[ ] Configuration class/struct with default() method")
+      (item "[ ] Environment variable override support")
+      (item "[ ] Test validates defaults against spec")
+      (item "[ ] README lists all configurable parameters")
+      (item "[ ] No hardcoded values (use config object)"))
+    (subsection
+      (heading "Cross-Language Checklist")
+      (item "[ ] Python defaults validated")
+      (item "[ ] Swift defaults validated")
+      (item "[ ] Interop tests pass with default config (no overrides)")
+      (item "[ ] Test output shows matching defaults")
+      (item "[ ] No rate limiter false positives")
+      (item "[ ] No replay protection false positives")))
+  (section
+    (heading "Version History")
+    (item "**1.0.0** (2026-01-18): Initial specification"))
+  (section
+    (heading "References")
+    (para "**Related Specifications:**")
+    (item "`specs/technical/yx-protocol-spec.sxp` - Protocol details")
+    (item "`specs/architecture/security-architecture.sxp` - Security configuration")
+    (item "`specs/architecture/protocol-layers.sxp` - Protocol configuration")
+    (item "`specs/testing/interoperability-requirements.sxp` - Test requirements")
+    (para "**SDTS Issues:**")
+    (item "SDTS Issue #2: Rate limiter default mismatch (documented in detail)")))

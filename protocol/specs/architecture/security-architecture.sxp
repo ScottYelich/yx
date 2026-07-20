@@ -1,0 +1,694 @@
+(doc
+  (title "YX Protocol: Security Architecture")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "**Version:** 1.0.0 **Date:** 2026-01-18 **Status:** Normative Specification **Traceability:** Gap 2.1, 2.2, 2.3, 3.4")
+  (section
+    (heading "Overview")
+    (para "The YX protocol implements defense-in-depth security through three independent layers:")
+    (item "1. **HMAC Authentication** (Layer 1) - Packet integrity and authenticity")
+    (item "2. **Replay Protection** (Layer 2) - Prevents replay attacks")
+    (item "3. **Rate Limiting** (Layer 3) - DDoS mitigation")
+    (para "Additionally, Protocol 1 provides optional **AES-256-GCM encryption** for payload confidentiality.")
+    (para "**Security Philosophy:** Multiple independent security mechanisms provide redundancy. If one layer fails, others still provide protection."))
+  (section
+    (heading "Security Pipeline")
+    (subsection
+      (heading "Send Path")
+      (code "Application Data
+    ↓
+[1] Rate Limit Check (per peer)
+    ↓ (if limit exceeded: REJECT)
+[2] Protocol Encoding (Protocol 0 or Protocol 1)
+    ↓
+[3] HMAC Computation (GUID + Payload)
+    ↓
+[4] UDP Send"))
+    (subsection
+      (heading "Receive Path")
+      (code "UDP Receive
+    ↓
+[1] Packet Parsing (extract HMAC, GUID, Payload)
+    ↓
+[2] HMAC Validation (constant-time comparison)
+    ↓ (if invalid: REJECT + log to /tmp/hmac_failures.log)
+[3] Replay Protection Check (nonce cache lookup)
+    ↓ (if seen before: REJECT)
+[4] Rate Limit Check (per peer sliding window)
+    ↓ (if limit exceeded: REJECT)
+[5] Protocol Decoding (Protocol 0 or Protocol 1)
+    ↓
+[6] Application Delivery")
+      (para "**Critical Property:** All three security layers (HMAC, replay protection, rate limiting) are independent. Each provides security value even if others are bypassed.")))
+  (section
+    (heading "Layer 1: HMAC Authentication")
+    (subsection
+      (heading "Purpose")
+      (para "Verify packet integrity and authenticity using shared symmetric key."))
+    (subsection
+      (heading "Algorithm")
+      (item "**Hash Function:** SHA-256")
+      (item "**MAC Construction:** HMAC (RFC 2104)")
+      (item "**Truncation:** First 16 bytes (128 bits)")
+      (item "**Key Size:** 32 bytes (256 bits)"))
+    (subsection
+      (heading "Input")
+      (code "hmac_input = GUID (6 bytes) + Payload (variable)
+hmac_output = HMAC-SHA256(hmac_input, key)
+hmac_truncated = hmac_output[0:16]"))
+    (subsection
+      (heading "Wire Format")
+      (code "Packet = [HMAC(16 bytes)] + [GUID(6 bytes)] + [Payload(variable)]"))
+    (subsection
+      (heading "Implementation Requirements")
+      (para "**Python:**")
+      (code "import hmac
+from cryptography.hazmat.primitives import hashes
+
+def compute_hmac(data: bytes, key: bytes) -> bytes:
+    \"\"\"Compute HMAC-SHA256, truncated to 16 bytes.\"\"\"
+    h = hmac.HMAC(key, hashes.SHA256())
+    h.update(data)
+    return h.finalize()[:16]")
+      (para "**Swift:**")
+      (code "import CryptoKit
+
+func computeHMAC(data: Data, key: SymmetricKey) -> Data {
+    let hmac = HMAC<SHA256>.authenticationCode(for: data, using: key)
+    return Data(hmac.prefix(16))  // Truncate to 16 bytes
+}"))
+    (subsection
+      (heading "Validation Requirements")
+      (para "**Constant-Time Comparison (CRITICAL):**")
+      (para "All implementations MUST use constant-time comparison to prevent timing attacks.")
+      (para "**Python:**")
+      (code "import hmac
+
+def validate_hmac(received: bytes, expected: bytes) -> bool:
+    \"\"\"Constant-time HMAC comparison.\"\"\"
+    return hmac.compare_digest(received, expected)")
+      (para "**Swift:**")
+      (code "func validateHMAC(received: Data, expected: Data) -> Bool {
+    // CryptoKit provides constant-time comparison
+    return received == expected  // Uses constant-time internally
+}")
+      (para "**Why constant-time matters:** Variable-time comparison leaks information about which bytes match, enabling timing attacks to recover the key."))
+    (subsection
+      (heading "Failed HMAC Forensics")
+      (para "When HMAC validation fails, implementations MUST log to `/tmp/hmac_failures.log` for debugging:")
+      (para "**Log Format:**")
+      (code "[2026-01-18 15:42:13.456789] HMAC VALIDATION FAILED
+Source: 192.168.1.100:54321
+GUID: E32E3CA702DE
+Expected HMAC: A1B2C3D4E5F6A7B8C1D2E3F4A5B6C7D8
+Received HMAC: A1B2C3D4E5F6A7B8FFFFFFFFFFFFFFFF
+Packet (hex): <full packet hex dump>
+---")
+      (para "**Properties:**")
+      (item "Timestamp with microseconds")
+      (item "Source IP and port")
+      (item "Sender GUID (hex)")
+      (item "Expected vs. received HMAC (hex)")
+      (item "Full packet hex for offline analysis")
+      (item "Append-only (do not truncate)")
+      (para "**Security Note:** Log file does NOT contain keys. Safe to share for debugging."))
+    (subsection
+      (heading "Security Properties")
+      (para "**Guarantees:**")
+      (item "✅ Packet integrity (cannot modify without detection)")
+      (item "✅ Packet authenticity (requires key to generate valid HMAC)")
+      (item "✅ Constant-time validation (prevents timing attacks)")
+      (para "**Does NOT Guarantee:**")
+      (item "❌ Confidentiality (payload visible in plaintext)")
+      (item "❌ Replay protection (same packet can be replayed)")
+      (item "❌ Forward secrecy (key compromise affects all messages)")))
+  (section
+    (heading "Layer 2: Replay Protection")
+    (subsection
+      (heading "Purpose")
+      (para "Prevent replay attacks where attacker captures valid packets and retransmits them."))
+    (subsection
+      (heading "Algorithm")
+      (para "Nonce cache with time-based expiry."))
+    (subsection
+      (heading "Nonce Selection")
+      (para "**Nonce = First 16 bytes of packet (HMAC value)**")
+      (para "**Why HMAC as nonce:**")
+      (item "Already computed for integrity check")
+      (item "Guaranteed unique per packet (different HMAC = different packet)")
+      (item "No additional overhead")
+      (item "Collision-resistant (SHA-256 properties)"))
+    (subsection
+      (heading "Data Structure")
+      (para "**Python:**")
+      (code "@dataclass
+class ReplayProtection:
+    _seen_nonces: Dict[bytes, float] = field(default_factory=dict)
+    max_age: float = 300.0  # 5 minutes
+
+    def check_and_record(self, nonce: bytes) -> bool:
+        \"\"\"Returns True if allowed (new), False if replay (seen before).\"\"\"
+        now = time.time()
+
+        # Check if seen
+        if nonce in self._seen_nonces:
+            return False  # REPLAY DETECTED
+
+        # Record new nonce
+        self._seen_nonces[nonce] = now
+
+        # Periodic cleanup (every 100 records)
+        if len(self._seen_nonces) >= 100:
+            self._cleanup(now)
+
+        return True  # ALLOWED
+
+    def _cleanup(self, now: float):
+        \"\"\"Remove expired nonces.\"\"\"
+        expired = [n for n, t in self._seen_nonces.items()
+                   if now - t > self.max_age]
+        for n in expired:
+            del self._seen_nonces[n]")
+      (para "**Swift:**")
+      (code "actor ReplayProtection {
+    private var seenNonces: [Data: Date] = [:]
+    private let maxAge: TimeInterval = 300  // 5 minutes
+
+    func checkAndRecord(nonce: Data) async -> Bool {
+        let now = Date()
+
+        // Check if seen
+        if seenNonces[nonce] != nil {
+            return false  // REPLAY DETECTED
+        }
+
+        // Record new nonce
+        seenNonces[nonce] = now
+
+        // Periodic cleanup
+        if seenNonces.count >= 100 {
+            cleanup(now: now)
+        }
+
+        return true  // ALLOWED
+    }
+
+    private func cleanup(now: Date) {
+        seenNonces = seenNonces.filter { _, timestamp in
+            now.timeIntervalSince(timestamp) <= maxAge
+        }
+    }
+}"))
+    (subsection
+      (heading "Configuration")
+      (table
+        (row "Parameter" "Default" "Unit" "Description")
+        (row "`max_age`" "300" "seconds" "How long to remember nonces")
+        (row "`cleanup_threshold`" "100" "count" "Trigger cleanup after N entries"))
+      (para "**Cross-Language Requirement:** Both Python and Swift MUST use identical defaults."))
+    (subsection
+      (heading "Memory Management")
+      (para "**Bounded Memory:**")
+      (item "Nonce cache size bounded by: `packet_rate * max_age`")
+      (item "Example: 1000 packets/sec × 300 sec = 300,000 nonces max")
+      (item "Each nonce: 16 bytes + 8 bytes timestamp = 24 bytes")
+      (item "Max memory: 300,000 × 24 = 7.2 MB")
+      (para "**Automatic Cleanup:**")
+      (item "Triggered after every 100 new nonces")
+      (item "Removes nonces older than `max_age`")
+      (item "Prevents unbounded growth"))
+    (subsection
+      (heading "Security Properties")
+      (para "**Guarantees:**")
+      (item "✅ Prevents replay of same packet")
+      (item "✅ Memory bounded by time window")
+      (item "✅ Automatic cleanup (no manual management)")
+      (para "**Does NOT Guarantee:**")
+      (item "❌ Protection within 1ms window (timestamp granularity)")
+      (item "❌ Protection from different source IP (nonce is per-packet, not per-sender)")
+      (item "❌ Protection after `max_age` expires")
+      (para "**Attack Vectors Mitigated:**")
+      (item "Attacker captures valid packet → Replays later → BLOCKED (nonce seen)")
+      (item "Attacker sends duplicate packets rapidly → BLOCKED (nonce cache)")
+      (para "**Attack Vectors NOT Mitigated:**")
+      (item "Attacker captures packet → Waits 6 minutes → Replays → ALLOWED (expired from cache)")
+      (item "Attacker sends packet to different instance → ALLOWED (different nonce cache)"))
+    (subsection
+      (heading "Integration")
+      (para "**Receive Path Position:**")
+      (code "HMAC Validation (Layer 1)
+    ↓
+Replay Protection Check (Layer 2) ← YOU ARE HERE
+    ↓
+Rate Limiting (Layer 3)")
+      (para "**Code Example (Python):**")
+      (code "# After HMAC validation passes
+nonce = packet.hmac  # First 16 bytes
+if not replay_protection.check_and_record(nonce):
+    logger.warning(f\"Replay detected: {nonce.hex()}\")
+    return  # REJECT packet")))
+  (section
+    (heading "Layer 3: Rate Limiting")
+    (subsection
+      (heading "Purpose")
+      (para "Prevent DoS attacks where single peer floods system with unlimited packets."))
+    (subsection
+      (heading "Algorithm")
+      (para "Sliding window rate limiting per peer."))
+    (subsection
+      (heading "Data Structure")
+      (para "**Python:**")
+      (code "@dataclass
+class RateLimiter:
+    max_requests: int = 10000  # CRITICAL: Must be 10,000 (not 100!)
+    window_seconds: float = 60.0
+    trusted_guids: Set[str] = field(default_factory=set)
+    _request_history: Dict[str, List[float]] = field(default_factory=dict)
+
+    def check_rate_limit(self, peer_id: str, source_addr: tuple) -> bool:
+        \"\"\"Returns True if allowed, False if rate limit exceeded.\"\"\"
+        # Check trusted GUID whitelist first
+        if peer_id in self.trusted_guids:
+            return True  # BYPASS rate limiting
+
+        now = time.time()
+
+        # Get peer's request history
+        if peer_id not in self._request_history:
+            self._request_history[peer_id] = []
+
+        history = self._request_history[peer_id]
+
+        # Remove requests outside window
+        cutoff = now - self.window_seconds
+        history[:] = [t for t in history if t > cutoff]
+
+        # Check if over limit
+        if len(history) >= self.max_requests:
+            logger.warning(
+                f\"Rate limit exceeded for {peer_id} from {source_addr}: \"
+                f\"{len(history)} requests in {self.window_seconds}s\"
+            )
+            return False  # REJECT
+
+        # Record new request
+        history.append(now)
+        return True  # ALLOW")
+      (para "**Swift:**")
+      (code "actor RateLimiter {
+    private let maxRequests: Int = 10000  // CRITICAL: Must be 10,000!
+    private let windowSeconds: TimeInterval = 60.0
+    private var requestHistory: [String: [Date]] = [:]
+
+    func checkRateLimit(peerID: String, sourceAddr: String) async -> Bool {
+        let now = Date()
+
+        // Get peer's history
+        var history = requestHistory[peerID] ?? []
+
+        // Remove requests outside window
+        let cutoff = now.addingTimeInterval(-windowSeconds)
+        history = history.filter { $0 > cutoff }
+
+        // Check if over limit
+        if history.count >= maxRequests {
+            print(\"Rate limit exceeded for \\(peerID): \\(history.count) requests\")
+            return false  // REJECT
+        }
+
+        // Record new request
+        history.append(now)
+        requestHistory[peerID] = history
+
+        return true  // ALLOW
+    }
+}"))
+    (subsection
+      (heading "Configuration")
+      (table
+        (row "Parameter" "Default" "Unit" "Description")
+        (row "`max_requests`" "10,000" "count" "Max requests per window")
+        (row "`window_seconds`" "60.0" "seconds" "Sliding window duration")
+        (row "`trusted_guids`" "empty set" "-" "GUIDs that bypass rate limiting")))
+    (subsection
+      (heading "Critical Historical Issue (SDTS Issue #2)")
+      (para "**Problem:** Swift v1.0.2 had `max_requests = 100`, Python had `max_requests = 10000`.")
+      (para "**Impact:** High-frequency trading systems blocked by Swift implementation.")
+      (para "**Lesson:** Default values MUST match across ALL implementations.")
+      (para "**Fix:** Changed Swift default to 10,000 to match Python.")
+      (para "**Requirement:** ALL future implementations (Rust, Go, etc.) MUST use 10,000 req/60s."))
+    (subsection
+      (heading "Trusted GUID Whitelist")
+      (para "**Purpose:** Allow specific peers to bypass rate limiting.")
+      (para "**Use Case:** Trusted services in high-frequency trading environment.")
+      (para "**Security:** GUID cannot be spoofed without key (HMAC validation ensures authenticity).")
+      (para "**API:**")
+      (code "rate_limiter.add_trusted_guid(\"E32E3CA702DE\")
+rate_limiter.remove_trusted_guid(\"E32E3CA702DE\")
+if rate_limiter.is_trusted(\"E32E3CA702DE\"):
+    # Bypass rate limiting"))
+    (subsection
+      (heading "Memory Management")
+      (para "**Bounded Memory:**")
+      (item "History size per peer: `max_requests` timestamps")
+      (item "Each timestamp: 8 bytes (float/double)")
+      (item "Memory per peer: `10,000 × 8 = 80 KB`")
+      (item "For 100 peers: `100 × 80 KB = 8 MB`")
+      (para "**Automatic Cleanup:**")
+      (item "Old timestamps removed on each check")
+      (item "Sliding window ensures bounded size")
+      (item "No manual cleanup needed"))
+    (subsection
+      (heading "Security Properties")
+      (para "**Guarantees:**")
+      (item "✅ Per-peer rate limiting (one bad peer doesn't affect others)")
+      (item "✅ Sliding window (smooth rate enforcement, no burst windows)")
+      (item "✅ Trusted GUID support (whitelist for services)")
+      (item "✅ Memory bounded by peer count and window size")
+      (para "**Does NOT Guarantee:**")
+      (item "❌ Protection against Sybil attacks (attacker creates many GUIDs)")
+      (item "❌ Protection against DDoS from many peers")
+      (item "❌ Fairness (trusted GUIDs get unlimited access)")
+      (para "**Attack Vectors Mitigated:**")
+      (item "Single peer sends 100,000 packets/second → BLOCKED after 10,000 in 60s")
+      (item "Single peer sends bursts → BLOCKED by sliding window")
+      (para "**Attack Vectors NOT Mitigated:**")
+      (item "Attacker uses 100 different GUIDs → Each gets 10,000 req/60s allowance")
+      (item "Distributed attack from many legitimate peers → Each peer allowed"))
+    (subsection
+      (heading "Integration")
+      (para "**Receive Path Position:**")
+      (code "HMAC Validation (Layer 1)
+    ↓
+Replay Protection (Layer 2)
+    ↓
+Rate Limiting (Layer 3) ← YOU ARE HERE
+    ↓
+Application Delivery")
+      (para "**Code Example (Python):**")
+      (code "# After replay protection passes
+peer_id = packet.guid.hex()
+if not rate_limiter.check_rate_limit(peer_id, source_addr):
+    return  # REJECT packet (rate limit exceeded)")))
+  (section
+    (heading "Layer 4: Encryption (Optional, Protocol 1 Only)")
+    (subsection
+      (heading "Purpose")
+      (para "Provide payload confidentiality and authenticity for Protocol 1 messages."))
+    (subsection
+      (heading "Algorithm")
+      (item "**Cipher:** AES-256-GCM (Galois/Counter Mode)")
+      (item "**Key Size:** 32 bytes (256 bits)")
+      (item "**Nonce Size:** 12 bytes (96 bits)")
+      (item "**Tag Size:** 16 bytes (128 bits)"))
+    (subsection
+      (heading "Wire Format")
+      (code "Encrypted Payload = [Nonce(12)] + [Ciphertext(variable)] + [Tag(16)]"))
+    (subsection
+      (heading "Key Management")
+      (para "**Shared Key:**")
+      (item "Same 32-byte key used for HMAC and AES")
+      (item "Derived from shared secret or key exchange")
+      (para "**Per-Peer Keys (Optional):**")
+      (item "KeyStore allows different keys per peer")
+      (item "Lookup by GUID")
+      (item "Fallback to default key if peer not found"))
+    (subsection
+      (heading "Nonce Generation")
+      (para "**Critical Requirement:** Nonce MUST be unique per encryption with same key.")
+      (para "**Python:**")
+      (code "import os
+
+def generate_nonce() -> bytes:
+    return os.urandom(12)  # Cryptographically secure random")
+      (para "**Swift:**")
+      (code "import CryptoKit
+
+func generateNonce() -> Data {
+    return AES.GCM.Nonce().data  // 12 bytes random
+}")
+      (para "**Why random nonces are safe:**")
+      (item "96-bit nonce space = 2^96 possible nonces")
+      (item "Birthday bound: ~2^48 messages before collision risk")
+      (item "For typical workloads: Safe for trillions of messages"))
+    (subsection
+      (heading "Encryption")
+      (para "**Python:**")
+      (code "from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+def encrypt_aes_gcm(plaintext: bytes, key: bytes) -> Tuple[bytes, bytes]:
+    aesgcm = AESGCM(key)  # 32-byte key
+    nonce = os.urandom(12)
+    ciphertext_with_tag = aesgcm.encrypt(nonce, plaintext, None)
+    return nonce, ciphertext_with_tag")
+      (para "**Swift:**")
+      (code "import CryptoKit
+
+func encryptAESGCM(plaintext: Data, key: SymmetricKey) throws -> Data {
+    let nonce = AES.GCM.Nonce()
+    let sealed = try AES.GCM.seal(plaintext, using: key, nonce: nonce)
+    return nonce + sealed.ciphertext + sealed.tag
+}"))
+    (subsection
+      (heading "Decryption")
+      (para "**Python:**")
+      (code "def decrypt_aes_gcm(nonce: bytes, ciphertext_with_tag: bytes, key: bytes) -> bytes:
+    aesgcm = AESGCM(key)
+    plaintext = aesgcm.decrypt(nonce, ciphertext_with_tag, None)
+    return plaintext")
+      (para "**Swift:**")
+      (code "func decryptAESGCM(encrypted: Data, key: SymmetricKey) throws -> Data {
+    let nonce = AES.GCM.Nonce(data: encrypted.prefix(12))
+    let ciphertext = encrypted.dropFirst(12).dropLast(16)
+    let tag = encrypted.suffix(16)
+
+    let sealed = try AES.GCM.SealedBox(
+        nonce: nonce,
+        ciphertext: ciphertext,
+        tag: tag
+    )
+
+    return try AES.GCM.open(sealed, using: key)
+}"))
+    (subsection
+      (heading "Wire Format Compatibility (SDTS Issue #1)")
+      (para "**Historical Note:** Initial implementation suspected Python/Swift incompatibility.")
+      (para "**Reality:** Both use identical wire format: `[nonce(12)] + [ciphertext] + [tag(16)]`")
+      (para "**Verification Method:** Dump actual bytes from both implementations, compare hex.")
+      (para "**Lesson:** Always verify with real wire dumps before claiming bugs."))
+    (subsection
+      (heading "Security Properties")
+      (para "**Guarantees (when enabled):**")
+      (item "✅ Confidentiality (payload unreadable without key)")
+      (item "✅ Authenticity (tag verifies payload not modified)")
+      (item "✅ Integrity (tag detects any modification)")
+      (para "**Does NOT Guarantee:**")
+      (item "❌ Forward secrecy (key compromise decrypts all messages)")
+      (item "❌ Traffic analysis protection (packet sizes/timing visible)")
+      (item "❌ Metadata confidentiality (HMAC, GUID, headers visible)")))
+  (section
+    (heading "Per-Peer Key Management")
+    (subsection
+      (heading "Purpose")
+      (para "Support multi-party scenarios where different peers use different keys."))
+    (subsection
+      (heading "Data Structure")
+      (para "**Python:**")
+      (code "@dataclass
+class KeyStore:
+    default_key: bytes  # 32 bytes, fallback key
+    _peer_keys: Dict[str, bytes] = field(default_factory=dict)
+
+    def get_key(self, peer_id: str) -> bytes:
+        \"\"\"Get peer-specific key or default.\"\"\"
+        return self._peer_keys.get(peer_id, self.default_key)
+
+    def set_key(self, peer_id: str, key: bytes):
+        \"\"\"Set peer-specific key (must be 32 bytes).\"\"\"
+        if len(key) != 32:
+            raise ValueError(\"Key must be exactly 32 bytes\")
+        self._peer_keys[peer_id] = key")
+      (para "**Swift:**")
+      (code "actor KeyStore {
+    private let defaultKey: SymmetricKey  // 32 bytes
+    private var peerKeys: [String: SymmetricKey] = [:]
+
+    func getKey(peerID: String) async -> SymmetricKey {
+        return peerKeys[peerID] ?? defaultKey
+    }
+
+    func setKey(peerID: String, key: SymmetricKey) async {
+        guard key.bitCount == 256 else {
+            fatalError(\"Key must be 256 bits (32 bytes)\")
+        }
+        peerKeys[peerID] = key
+    }
+}"))
+    (subsection
+      (heading "Use Cases")
+      (item "1. **Multi-Tenant Systems:** Different key per tenant")
+      (item "2. **Peer-to-Peer Networks:** Different key per peer")
+      (item "3. **Service Mesh:** Different key per service")
+      (item "4. **Broadcast with Selective Access:** Default key for broadcast, per-peer keys for unicast"))
+    (subsection
+      (heading "Lookup Algorithm")
+      (code "1. Extract GUID from packet
+2. Convert GUID to hex string (peer_id)
+3. Look up peer_id in KeyStore
+4. If found: Use peer-specific key
+5. If not found: Use default key
+6. Validate HMAC with selected key")))
+  (section
+    (heading "Security Testing Requirements")
+    (subsection
+      (heading "Test Coverage")
+      (para "All implementations MUST include tests for:")
+      (item "1. **HMAC Validation**")
+      (item "Valid HMAC passes")
+      (item "Invalid HMAC rejected")
+      (item "Modified payload rejected")
+      (item "Constant-time comparison (timing analysis)")
+      (item "2. **Replay Protection**")
+      (item "First packet allowed")
+      (item "Duplicate packet rejected")
+      (item "Expired nonce allowed (after `max_age`)")
+      (item "Cleanup removes old nonces")
+      (item "3. **Rate Limiting**")
+      (item "Under limit allowed")
+      (item "Over limit rejected")
+      (item "Sliding window behavior")
+      (item "Trusted GUID bypass")
+      (item "Per-peer isolation")
+      (item "4. **Encryption (Protocol 1)**")
+      (item "Encryption produces ciphertext ≠ plaintext")
+      (item "Decryption recovers original plaintext")
+      (item "Cross-language compatibility (Python ↔ Swift)")
+      (item "Invalid tag rejected")
+      (item "5. **Per-Peer Keys**")
+      (item "Peer-specific key used when set")
+      (item "Default key used when peer not found")
+      (item "32-byte validation enforced"))
+    (subsection
+      (heading "Security Test Scenarios")
+      (para "**Scenario 1: Replay Attack**")
+      (code "1. Capture valid packet
+2. Send packet again
+3. Verify: Second transmission rejected")
+      (para "**Scenario 2: DoS Attack**")
+      (code "1. Send 10,001 packets from same peer
+2. Verify: Packet 10,001 rejected (rate limit)")
+      (para "**Scenario 3: Modified Payload**")
+      (code "1. Build valid packet
+2. Modify payload byte
+3. Send modified packet
+4. Verify: HMAC validation fails, packet rejected")
+      (para "**Scenario 4: Encryption Confidentiality**")
+      (code "1. Encrypt payload \"SECRET\"
+2. Verify: Ciphertext does not contain \"SECRET\"
+3. Decrypt ciphertext
+4. Verify: Plaintext equals \"SECRET\"")))
+  (section
+    (heading "Threat Model")
+    (subsection
+      (heading "Assumptions")
+      (para "**Trust Assumptions:**")
+      (item "✅ Symmetric key is secret (not compromised)")
+      (item "✅ Cryptographic algorithms are secure (SHA-256, AES-256-GCM)")
+      (item "✅ RNG is cryptographically secure (os.urandom, SecRandomCopyBytes)")
+      (item "✅ Implementation is correct (no bugs)")
+      (para "**Network Assumptions:**")
+      (item "❌ Network is hostile (attacker has full access)")
+      (item "❌ Packets can be captured, modified, replayed")
+      (item "❌ Timing information is observable"))
+    (subsection
+      (heading "Threats Mitigated")
+      (table
+        (row "Threat" "Mitigation" "Layer")
+        (row "Modified packets" "HMAC validation" "Layer 1")
+        (row "Spoofed packets" "HMAC validation" "Layer 1")
+        (row "Replay attacks" "Replay protection" "Layer 2")
+        (row "DoS from single peer" "Rate limiting" "Layer 3")
+        (row "Eavesdropping" "AES encryption" "Layer 4")
+        (row "Modified encrypted data" "GCM tag" "Layer 4")))
+    (subsection
+      (heading "Threats NOT Mitigated")
+      (table
+        (row "Threat" "Why Not Mitigated" "Possible Defense")
+        (row "Key compromise" "Symmetric key system" "Use PKI (e.g., TaskHelloHandler)")
+        (row "DDoS from many peers" "Per-peer rate limiting" "Network-level filtering")
+        (row "Sybil attack (many GUIDs)" "No GUID authentication" "Require GUID registration")
+        (row "Traffic analysis" "Metadata always visible" "Use mix networks, padding")
+        (row "Timing attacks" "Constant-time comparison only" "Add jitter, padding")
+        (row "Expired nonce replay" "Fixed time window" "Reduce `max_age` (trade-off)"))))
+  (section
+    (heading "Compliance and Standards")
+    (subsection
+      (heading "Cryptographic Standards")
+      (item "**HMAC:** RFC 2104")
+      (item "**SHA-256:** FIPS 180-4")
+      (item "**AES-GCM:** NIST SP 800-38D")
+      (item "**Key Sizes:** NIST recommendations (256-bit for AES, 256-bit for HMAC key)"))
+    (subsection
+      (heading "Best Practices")
+      (para "✅ **DO:**")
+      (item "Use constant-time comparison for HMAC validation")
+      (item "Generate fresh random nonce for each AES encryption")
+      (item "Use 32-byte keys for both HMAC and AES")
+      (item "Log failed HMAC attempts for forensics")
+      (item "Clean up expired nonces automatically")
+      (item "Use sliding window for rate limiting")
+      (para "❌ **DO NOT:**")
+      (item "Reuse nonces with same key")
+      (item "Use predictable nonces (counter, timestamp)")
+      (item "Skip HMAC validation for \"trusted\" peers")
+      (item "Disable replay protection in production")
+      (item "Set rate limit to 100 (use 10,000)")
+      (item "Implement custom crypto (use standard libraries)")))
+  (section
+    (heading "Implementation Checklist")
+    (subsection
+      (heading "Python Implementation")
+      (item "[ ] HMAC computation using `hmac` module")
+      (item "[ ] Constant-time comparison using `hmac.compare_digest()`")
+      (item "[ ] Replay protection with dict-based nonce cache")
+      (item "[ ] Rate limiter with per-peer history")
+      (item "[ ] AES-256-GCM using `cryptography` library")
+      (item "[ ] Per-peer key management with KeyStore")
+      (item "[ ] Failed HMAC logging to `/tmp/hmac_failures.log`")
+      (item "[ ] All security tests passing"))
+    (subsection
+      (heading "Swift Implementation")
+      (item "[ ] HMAC computation using CryptoKit")
+      (item "[ ] Constant-time comparison (CryptoKit default)")
+      (item "[ ] Replay protection actor with nonce cache")
+      (item "[ ] Rate limiter actor with per-peer history")
+      (item "[ ] AES-256-GCM using CryptoKit")
+      (item "[ ] Per-peer key management with KeyStore actor")
+      (item "[ ] Failed HMAC logging to `/tmp/hmac_failures.log`")
+      (item "[ ] All security tests passing"))
+    (subsection
+      (heading "Cross-Language Validation")
+      (item "[ ] HMAC produces identical output (Python ↔ Swift)")
+      (item "[ ] AES-256-GCM wire format compatible (Python ↔ Swift)")
+      (item "[ ] Default values match exactly (10,000 req/60s, 300s expiry)")
+      (item "[ ] Replay protection behavior identical")
+      (item "[ ] Rate limiting behavior identical")
+      (item "[ ] Interop tests pass (48/48)")))
+  (section
+    (heading "Version History")
+    (item "**1.0.0** (2026-01-18): Initial specification"))
+  (section
+    (heading "References")
+    (para "**Related Specifications:**")
+    (item "`specs/technical/yx-protocol-spec.sxp` - Protocol details")
+    (item "`specs/testing/interoperability-requirements.sxp` - Testing requirements")
+    (item "`specs/architecture/protocol-layers.sxp` - Protocol layer architecture")
+    (item "`specs/technical/default-values.sxp` - Default value requirements")
+    (para "**SDTS Lessons:**")
+    (item "SDTS Issue #2: Rate limiter default mismatch (100 vs 10,000)")
+    (item "SDTS Issue #3: Missing replay protection in Python")
+    (item "SDTS Issue #1: AES-GCM wire format verification (false alarm, both compatible)")
+    (para "**Standards:**")
+    (item "RFC 2104: HMAC")
+    (item "FIPS 180-4: SHA-256")
+    (item "NIST SP 800-38D: AES-GCM")))

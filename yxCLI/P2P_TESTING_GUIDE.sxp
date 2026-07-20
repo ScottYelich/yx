@@ -1,0 +1,245 @@
+(doc
+  (title "yxCLI P2P Testing Guide")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (section
+    (heading "Overview")
+    (para "The yxCLI now supports full peer-to-peer mesh networking with configurable ports and peer targets. This guide shows you how to test P2P communication between multiple instances."))
+  (section
+    (heading "New CLI Arguments")
+    (subsection
+      (heading "`--port <number>`")
+      (para "Sets the UDP port this instance will listen on.")
+      (kv "Default" "9999")
+      (kv "Example" "`--port 9998`"))
+    (subsection
+      (heading "`--peers <host:port,host:port,...>`")
+      (para "Comma-separated list of peers to send task.hello packets to.")
+      (kv "Default" "If not specified, broadcasts to 192.168.1.255:9999")
+      (kv "Example" "`--peers localhost:9999,localhost:9997`"))
+    (subsection
+      (heading "`--shutdown-after <seconds>`")
+      (para "Automatically shutdown after N seconds.")
+      (kv "Default" "Runs indefinitely until Ctrl+C")
+      (kv "Example" "`--shutdown-after 10`"))
+    (subsection
+      (heading "`--proto-opts <value>`")
+      (para "Protocol 1 options for binary packet testing (hex or decimal).")
+      (kv "Default" "If not specified, sends Protocol 0 text packets (task.hello)")
+      (item "**Values**:")
+      (item "`0x00` or `0` = Plaintext, Uncompressed")
+      (item "`0x01` or `1` = Plaintext, Compressed")
+      (item "`0x02` or `2` = Encrypted, Uncompressed")
+      (item "`0x03` or `3` = Encrypted, Compressed")
+      (kv "Example" "`--proto-opts 0x03` (encrypted and compressed)"))
+    (subsection
+      (heading "Legacy Arguments")
+      (item "`--identity <name>` - Identity name for PKI keys")
+      (item "`--pubkeys <path>` - Path to trusted public keys JSON")
+      (item "`--privkeys <path>` - Path to private keys JSON")))
+  (section
+    (heading "Quick Start")
+    (subsection
+      (heading "Two Instances Communicating")
+      (para "**Terminal 1:**")
+      (code "swift run yxCLI --port 9998 --peers localhost:9999")
+      (para "**Terminal 2:**")
+      (code "swift run yxCLI --port 9999 --peers localhost:9998"))
+    (subsection
+      (heading "What You'll See")
+      (para "Each instance will:")
+      (item "1. Generate a unique GUID")
+      (item "2. Start listening on its configured port")
+      (item "3. Send PKI-authenticated task.hello packets to configured peers")
+      (item "4. Receive and verify hello packets from other peers")
+      (item "5. Exchange symmetric keys securely using ECDH")
+      (para "**Example Output:**")
+      (code "🔧 Running yxCLI
+🧩 GUID: C42EA8B37A05
+🔐 Key: D3046ECC8DD3242ADF62801A33EF1004003B01B4C8F558DF72E637DA30321CCD
+🌐 Listening on port: 9998
+🌐 UDP listening on port 9998
+📤 Sent text packet to localhost:9999
+📣 Sent task.hello to localhost:9999
+🔄 Running indefinitely (Ctrl+C to stop)")))
+  (section
+    (heading "Automated Testing Script")
+    (para "Use the included `test-p2p.sh` script for automated multi-instance testing:")
+    (code "# Two-peer test (default)
+./test-p2p.sh
+
+# Or explicitly:
+./test-p2p.sh two-peer
+
+# Three-peer mesh network
+./test-p2p.sh three-mesh
+
+# Star topology (hub and spokes)
+./test-p2p.sh star
+
+# Protocol options test (all 4 variations)
+./test-p2p.sh proto-opts")
+    (subsection
+      (heading "Test Scenarios")
+      (subsection
+        (heading "1. Two-Peer Communication")
+        (code "Instance A (9998) <-> Instance B (9999)")
+        (item "Both instances send hellos to each other")
+        (item "Tests basic P2P communication"))
+      (subsection
+        (heading "2. Three-Peer Mesh")
+        (code "Instance A (9998) <-> Instance B (9999) <-> Instance C (9997)
+        ^                                          |
+        |                                          |
+        +------------------------------------------+")
+        (item "All instances send to all others")
+        (item "Tests mesh network topology"))
+      (subsection
+        (heading "3. Star Topology")
+        (code "        Hub (9999)
+       /    |    \\
+      /     |     \\
+  Spoke A  Spoke B  Spoke C
+  (9998)   (9997)   (9996)")
+        (item "All spokes send to hub")
+        (item "Hub receives from all spokes")
+        (item "Tests hub-and-spoke pattern"))
+      (subsection
+        (heading "4. Protocol Options Test")
+        (code "        Hub (9999)
+       /    |    |    \\
+      /     |    |     \\
+ Sender A  B    C    D
+ (9998)  (9997) (9996) (9995)
+ 0x00    0x01   0x02   0x03")
+        (item "Hub receives all 4 protocol option variations")
+        (item "Sender A: 0x00 (Plaintext, Uncompressed)")
+        (item "Sender B: 0x01 (Plaintext, Compressed)")
+        (item "Sender C: 0x02 (Encrypted, Uncompressed)")
+        (item "Sender D: 0x03 (Encrypted, Compressed)")
+        (item "Tests all Protocol 1 encoding options in P2P communication")))
+    (subsection
+      (heading "Test Output")
+      (para "The script will:")
+      (item "1. Launch all instances in the background")
+      (item "2. Wait for configured timeout (default 10 seconds)")
+      (item "3. Collect logs from each instance")
+      (item "4. Display summary of all communication")
+      (item "5. Clean up processes")
+      (kv "Logs are saved to" "`p2p-test-logs/*.log`")))
+  (section
+    (heading "Manual Testing")
+    (subsection
+      (heading "Example 1: Basic Two-Instance Test")
+      (para "**Terminal 1:**")
+      (code "cd /path/to/yxCLI
+swift run yxCLI --port 9998 --peers localhost:9999")
+      (para "**Terminal 2:**")
+      (code "cd /path/to/yxCLI  
+swift run yxCLI --port 9999 --peers localhost:9998")
+      (para "Leave running for a few seconds, then press Ctrl+C in both terminals."))
+    (subsection
+      (heading "Example 2: Timed Test")
+      (para "**Terminal 1:**")
+      (code "swift run yxCLI --port 9998 --peers localhost:9999 --shutdown-after 5")
+      (para "**Terminal 2:**")
+      (code "swift run yxCLI --port 9999 --peers localhost:9998 --shutdown-after 5")
+      (para "Both will automatically shutdown after 5 seconds."))
+    (subsection
+      (heading "Example 3: Multi-Peer Mesh")
+      (para "**Terminal 1 (connects to 2 peers):**")
+      (code "swift run yxCLI --port 9998 --peers localhost:9999,localhost:9997")
+      (para "**Terminal 2 (connects to 2 peers):**")
+      (code "swift run yxCLI --port 9999 --peers localhost:9998,localhost:9997")
+      (para "**Terminal 3 (connects to 2 peers):**")
+      (code "swift run yxCLI --port 9997 --peers localhost:9998,localhost:9999"))
+    (subsection
+      (heading "Example 4: Testing Protocol Options")
+      (para "**Terminal 1 (receiver):**")
+      (code "swift run yxCLI --port 9999 --shutdown-after 10")
+      (para "**Terminal 2 (plaintext uncompressed):**")
+      (code "swift run yxCLI --port 9998 --peers localhost:9999 --proto-opts 0x00 --shutdown-after 10")
+      (para "**Terminal 3 (plaintext compressed):**")
+      (code "swift run yxCLI --port 9997 --peers localhost:9999 --proto-opts 0x01 --shutdown-after 10")
+      (para "**Terminal 4 (encrypted uncompressed):**")
+      (code "swift run yxCLI --port 9996 --peers localhost:9999 --proto-opts 0x02 --shutdown-after 10")
+      (para "**Terminal 5 (encrypted compressed):**")
+      (code "swift run yxCLI --port 9995 --peers localhost:9999 --proto-opts 0x03 --shutdown-after 10")))
+  (section
+    (heading "Understanding the Output")
+    (subsection
+      (heading "Connection Establishment")
+      (code "🌐 UDP listening on port 9998")
+      (para "UDP socket is now listening for incoming packets."))
+    (subsection
+      (heading "Sending Hello (Protocol 0)")
+      (code "📤 Sent text packet to localhost:9999
+📣 Sent task.hello to localhost:9999")
+      (para "PKI-authenticated hello packet was sent to peer."))
+    (subsection
+      (heading "Sending Binary Test (Protocol 1)")
+      (code "🧪 Testing Protocol 1 with protoOpts: 0x03
+📤 BinaryProtocol: Sent 1 chunk(s) with opts 0x03 to localhost:9999
+📦 Sent binary test (Encrypted, Compressed) to localhost:9999")
+      (para "Binary packet with specified encoding options was sent to peer."))
+    (subsection
+      (heading "Receiving Hello (in library logs)")
+      (code "🔐 [task.hello] Learned verified key for peer 715E943A1148")
+      (para "Successfully verified peer's signature and derived shared symmetric key."))
+    (subsection
+      (heading "Shutdown")
+      (code "⏱️  Shutdown timer expired
+🛑 NetworkSystem: Initiating graceful shutdown...
+✅ NetworkSystem: Shutdown complete")))
+  (section
+    (heading "What's Happening Under the Hood")
+    (item "1. **GUID Generation**: Each instance generates a unique 6-byte GUID")
+    (item "2. **Key Generation**: Ephemeral Curve25519 keypair for ECDH")
+    (item "3. **Signing**: P256 keypair for signing hello packets")
+    (item "4. **Hello Packet**: Contains GUID, timestamp, public keys, and signature")
+    (item "5. **Verification**: Peers verify signatures before accepting keys")
+    (item "6. **Key Derivation**: Shared symmetric keys derived using ECDH")
+    (item "7. **Secure Communication**: Future messages encrypted with derived keys"))
+  (section
+    (heading "Troubleshooting")
+    (subsection
+      (heading "\"Address already in use\"")
+      (para "Two instances trying to use the same port. Ensure each has a unique `--port`."))
+    (subsection
+      (heading "No communication happening")
+      (para "Check that:")
+      (item "Ports are correct in `--peers` argument")
+      (item "Instances are running simultaneously")
+      (item "Firewall not blocking localhost communication"))
+    (subsection
+      (heading "Swift build conflicts")
+      (para "If you see \"Another instance of SwiftPM is running\", this is normal when launching multiple instances quickly. The second instance waits for the first build to complete.")))
+  (section
+    (heading "Advanced Usage")
+    (subsection
+      (heading "Broadcast Mode")
+      (para "Don't specify `--peers` to use broadcast discovery:")
+      (code "swift run yxCLI --port 9998")
+      (para "Sends hello to 192.168.1.255:9999 (LAN broadcast)."))
+    (subsection
+      (heading "Mixed Mode")
+      (para "Some instances broadcast, others use directed peers:")
+      (code "# Hub: broadcasts
+swift run yxCLI --port 9999
+
+# Spoke: targets hub specifically
+swift run yxCLI --port 9998 --peers localhost:9999"))
+    (subsection
+      (heading "Long-Running Test")
+      (code "swift run yxCLI --port 9998 --peers localhost:9999 --shutdown-after 3600")
+      (para "Runs for 1 hour (3600 seconds).")))
+  (section
+    (heading "Next Steps")
+    (item "Implement message passing beyond hello packets")
+    (item "Add periodic hello refresh")
+    (item "Implement peer discovery protocol")
+    (item "Add connection quality monitoring")
+    (item "Create interactive REPL for sending messages")
+    (kv "Test Environment" "macOS 12+, Swift 6.1+")
+    (kv "Protocol" "UDP with PKI-authenticated key exchange")
+    (kv "Security" "ECDH key agreement + P256 signatures")))

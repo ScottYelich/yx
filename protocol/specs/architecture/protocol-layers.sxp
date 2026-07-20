@@ -1,0 +1,603 @@
+(doc
+  (title "YX Protocol: Protocol Layer Architecture")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "**Version:** 1.0.0 **Date:** 2026-01-18 **Status:** Normative Specification **Traceability:** Gap 1.1, 1.2, 1.3, 1.4")
+  (section
+    (heading "Overview")
+    (para "The YX protocol implements a three-layer architecture:")
+    (item "1. **Transport Layer** - HMAC + GUID + Payload (UDP delivery)")
+    (item "2. **Protocol Layer** - Protocol 0 (Text) or Protocol 1 (Binary)")
+    (item "3. **Application Layer** - Message handling and RPC dispatch")
+    (para "This document describes the protocol layer architecture, protocol routing, and layer interactions."))
+  (section
+    (heading "Layer Architecture Diagram")
+    (code "┌──────────────────────────────────────────────────────────────┐
+│                     APPLICATION LAYER                         │
+│  (JSON-RPC dispatch, message handlers, business logic)       │
+└──────────────────────────────────────────────────────────────┘
+                            ↑
+                            │ Decoded Message
+                            │
+┌──────────────────────────────────────────────────────────────┐
+│                      PROTOCOL LAYER                           │
+│                                                               │
+│  ┌────────────────────┐          ┌─────────────────────────┐ │
+│  │  Protocol Router   │          │   Protocol Handlers     │ │
+│  │  (Routes by ID)    │────────▶ │  - TextProtocol (0x00) │ │
+│  └────────────────────┘          │  - BinaryProtocol(0x01)│ │
+│                                   └─────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
+                            ↑
+                            │ Validated Payload
+                            │
+┌──────────────────────────────────────────────────────────────┐
+│                      TRANSPORT LAYER                          │
+│  (UDP + HMAC validation + Replay + Rate Limiting)            │
+└──────────────────────────────────────────────────────────────┘
+                            ↑
+                            │ Raw UDP Datagram
+                            │
+┌──────────────────────────────────────────────────────────────┐
+│                      NETWORK LAYER                            │
+│  (UDP/IP, OS kernel)                                          │
+└──────────────────────────────────────────────────────────────┘"))
+  (section
+    (heading "Transport Layer (Layer 1)")
+    (subsection
+      (heading "Responsibility")
+      (para "Deliver authenticated UDP packets with integrity verification and security enforcement."))
+    (subsection
+      (heading "Wire Format")
+      (code "[HMAC(16 bytes)] + [GUID(6 bytes)] + [Payload(variable)]"))
+    (subsection
+      (heading "Components")
+      (para "**1. UDP Socket**")
+      (item "Binds to port (default: 50000)")
+      (item "Receives raw datagrams")
+      (item "Sends datagrams to broadcast address")
+      (para "**2. Packet Parser**")
+      (item "Extracts HMAC, GUID, Payload from raw bytes")
+      (item "Validates minimum packet size (22 bytes)")
+      (item "Returns structured Packet object")
+      (para "**3. HMAC Validator**")
+      (item "Looks up key by GUID (per-peer keys)")
+      (item "Recomputes HMAC over GUID + Payload")
+      (item "Compares using constant-time comparison")
+      (item "Logs failures to `/tmp/hmac_failures.log`")
+      (para "**4. Replay Protection (Optional)**")
+      (item "Extracts nonce (HMAC value)")
+      (item "Checks if nonce seen before")
+      (item "Records new nonces with timestamp")
+      (item "Rejects replayed packets")
+      (para "**5. Rate Limiter (Optional)**")
+      (item "Tracks requests per peer (sliding window)")
+      (item "Enforces limits (default: 10,000 req/60s)")
+      (item "Supports trusted GUID whitelist")
+      (item "Rejects over-limit packets"))
+    (subsection
+      (heading "Output")
+      (para "Validated payload (bytes) passed to Protocol Layer."))
+    (subsection
+      (heading "Error Handling")
+      (item "Packet too small → DROP (silent)")
+      (item "HMAC invalid → DROP + log to /tmp")
+      (item "Replay detected → DROP + log warning")
+      (item "Rate limit exceeded → DROP + log warning")))
+  (section
+    (heading "Protocol Layer (Layer 2)")
+    (subsection
+      (heading "Responsibility")
+      (para "Decode protocol-specific payload format and handle message reassembly."))
+    (subsection
+      (heading "Protocol Routing")
+      (para "**Routing Algorithm:**")
+      (code "1. Receive validated payload from Transport Layer
+2. Extract first byte (Protocol ID)
+3. Route to appropriate protocol handler:
+   - 0x00 → TextProtocol handler
+   - 0x01 → BinaryProtocol handler
+   - Other → Log error, drop packet"))
+    (subsection
+      (heading "Protocol ID Registry")
+      (table
+        (row "Protocol ID" "Protocol Name" "Status" "Handler")
+        (row "0x00" "Text/JSON-RPC" "✅ Required" "TextProtocol")
+        (row "0x01" "Binary/Chunked" "✅ Required" "BinaryProtocol")
+        (row "0x21" "Task Hello (Reserved)" "⚠️ Optional" "TaskHelloHandler")
+        (row "0x22" "RPC Chain (Reserved)" "⚠️ Optional" "RPCChainHandler")
+        (row "0x23" "Task Chain (Reserved)" "⚠️ Optional" "TaskChainHandler")
+        (row "0x02-0x20" "Reserved for future" "-" "-")
+        (row "0x24-0xFF" "Available" "-" "-"))
+      (para "**Extension Point:** New protocols can be added by implementing handler interface and registering with router.")))
+  (section
+    (heading "Protocol 0: Text/JSON-RPC")
+    (subsection
+      (heading "Purpose")
+      (para "Human-readable text messages for RPC calls, status requests, and debugging."))
+    (subsection
+      (heading "Wire Format")
+      (code "[Protocol ID: 0x00] + [UTF-8 JSON payload]"))
+    (subsection
+      (heading "Characteristics")
+      (item "**Single packet:** No chunking, entire message in one UDP packet")
+      (item "**Max size:** ~1450 bytes (UDP MTU - YX header)")
+      (item "**Encoding:** UTF-8")
+      (item "**Format:** JSON-RPC 2.0 (recommended) or plain JSON")
+      (item "**Compression:** None")
+      (item "**Encryption:** None")
+      (item "**Reliability:** UDP semantics (best-effort)"))
+    (subsection
+      (heading "JSON-RPC 2.0 Format")
+      (para "**Request:**")
+      (code "{
+  \"jsonrpc\": \"2.0\",
+  \"id\": \"req-001\",
+  \"method\": \"task.hello\",
+  \"params\": {
+    \"name\": \"Alice\",
+    \"timestamp\": 1705600000
+  }
+}")
+      (para "**Response:**")
+      (code "{
+  \"jsonrpc\": \"2.0\",
+  \"id\": \"req-001\",
+  \"result\": {
+    \"status\": \"ok\",
+    \"message\": \"Hello, Alice!\"
+  }
+}")
+      (para "**Error:**")
+      (code "{
+  \"jsonrpc\": \"2.0\",
+  \"id\": \"req-001\",
+  \"error\": {
+    \"code\": -32601,
+    \"message\": \"Method not found\"
+  }
+}"))
+    (subsection
+      (heading "Handler Responsibilities")
+      (para "**Receive Path:**")
+      (code "1. Verify first byte is 0x00
+2. Extract payload[1:] (skip protocol ID)
+3. Decode as UTF-8
+4. Parse as JSON
+5. Validate JSON-RPC structure (if applicable)
+6. Dispatch to application callback")
+      (para "**Send Path:**")
+      (code "1. Encode message as JSON
+2. Convert to UTF-8 bytes
+3. Prepend protocol ID (0x00)
+4. Pass to Transport Layer for HMAC + send"))
+    (subsection
+      (heading "Use Cases")
+      (item "RPC method calls")
+      (item "Configuration requests")
+      (item "Status queries")
+      (item "Debugging messages")
+      (item "Command/control messages"))
+    (subsection
+      (heading "Limitations")
+      (item "Single packet only (no multi-packet messages)")
+      (item "No compression (payload visible in full size)")
+      (item "No encryption (payload visible in plaintext)")
+      (item "No reassembly (message must fit in one UDP packet)")))
+  (section
+    (heading "Protocol 1: Binary/Chunked (v2.0)")
+    (subsection
+      (heading "Purpose")
+      (para "High-performance binary data with optional compression/encryption and support for large messages."))
+    (subsection
+      (heading "Wire Format")
+      (code "[Protocol ID: 0x01] + [protoOpts: 1 byte] + [channelID: 2 bytes] +
+[sequence: 4 bytes] + [chunkIndex: 4 bytes] + [totalChunks: 4 bytes] +
+[chunk data: variable]"))
+    (subsection
+      (heading "Header Fields")
+      (table
+        (row "Field" "Size" "Type" "Range" "Description")
+        (row "Protocol ID" "1 byte" "uint8" "0x01" "Always 0x01 for Binary Protocol")
+        (row "protoOpts" "1 byte" "uint8" "0x00-0x03" "Compression/encryption flags")
+        (row "channelID" "2 bytes" "uint16" "0-65535" "Logical channel number")
+        (row "sequence" "4 bytes" "uint32" "0-2^32-1" "Per-channel sequence number")
+        (row "chunkIndex" "4 bytes" "uint32" "0-N" "Current chunk (0-based)")
+        (row "totalChunks" "4 bytes" "uint32" "1-N" "Total chunks in message"))
+      (para "**Total Header Size:** 16 bytes"))
+    (subsection
+      (heading "protoOpts Flags")
+      (table
+        (row "Value" "Binary" "Compression" "Encryption" "Description")
+        (row "0x00" "00" "No" "No" "Plain binary, no processing")
+        (row "0x01" "01" "Yes (ZLIB)" "No" "Compressed only")
+        (row "0x02" "10" "No" "Yes (AES-GCM)" "Encrypted only")
+        (row "0x03" "11" "Yes" "Yes" "Compressed then encrypted")))
+    (subsection
+      (heading "Channel Multiplexing")
+      (para "**Channel Isolation:**")
+      (item "65,536 independent channels (16-bit channelID)")
+      (item "Each channel has independent sequence counter (32-bit)")
+      (item "Messages on different channels do not interfere")
+      (item "Enables concurrent multi-stream communication")
+      (para "**Buffer Key:** `(channelID, sequence)` tuple")
+      (item "Uniquely identifies a message being reassembled")
+      (item "Multiple messages can reassemble concurrently")
+      (item "No blocking between channels")
+      (para "**Use Cases:**")
+      (item "Channel 0: Command/control messages")
+      (item "Channel 1: Market data stream")
+      (item "Channel 2: Order flow")
+      (item "Channel 3: Heartbeats")
+      (item "Channels 4-65535: Application-specific"))
+    (subsection
+      (heading "Chunking")
+      (para "**Chunk Size:** Default 1024 bytes (configurable)")
+      (para "**Why Chunking:**")
+      (item "UDP MTU typically 1500 bytes")
+      (item "YX header (22 bytes) + Protocol 1 header (16 bytes) = 38 bytes overhead")
+      (item "Safe chunk data size: 1024 bytes (total packet ~1062 bytes, under MTU)")
+      (item "Enables arbitrarily large messages (2^32 chunks × chunk size)")
+      (para "**Reassembly:**")
+      (code "1. Receive chunk with (channelID, sequence, chunkIndex, totalChunks)
+2. Buffer key = (channelID, sequence)
+3. Store chunk at chunks[chunkIndex]
+4. If all chunks received (len(chunks) == totalChunks):
+   a. Reassemble in chunk order
+   b. Remove from buffer (prevent re-processing)
+   c. Proceed to decryption/decompression")
+      (para "**Stale Buffer Management:**")
+      (item "Buffer timeout: 60 seconds (default)")
+      (item "Incomplete messages removed after timeout")
+      (item "Prevents memory leaks from partial messages"))
+    (subsection
+      (heading "Compression (protoOpts & 0x01)")
+      (para "**Algorithm:** ZLIB (RFC 1951) **Format:** Raw DEFLATE (wbits=-15) **Level:** Default 6 (balanced)")
+      (para "**When Applied:** Before encryption, after application data")
+      (para "**Python:**")
+      (code "compressed = zlib.compress(data, level=6, wbits=-15)")
+      (para "**Swift:**")
+      (code "let compressed = data.compressed(using: .zlib)")
+      (para "**Wire Format Compatibility:** Both produce identical raw DEFLATE streams."))
+    (subsection
+      (heading "Encryption (protoOpts & 0x02)")
+      (para "**Algorithm:** AES-256-GCM **Key Size:** 32 bytes **Nonce Size:** 12 bytes (random per encryption) **Tag Size:** 16 bytes")
+      (para "**When Applied:** After compression (if enabled), before chunking")
+      (para "**Wire Format:**")
+      (code "[nonce(12)] + [ciphertext(variable)] + [tag(16)]")
+      (para "**Critical:** Encryption applied to FULL reassembled message, not per-chunk."))
+    (subsection
+      (heading "Deduplication")
+      (para "**Purpose:** Prevent duplicate delivery of same message (e.g., retransmissions).")
+      (para "**Algorithm:**")
+      (item "Track processed `(channelID, sequence)` tuples")
+      (item "Deduplication window: 5 seconds (default)")
+      (item "If seen before: silently drop")
+      (item "If new: proceed with processing"))
+    (subsection
+      (heading "Processing Pipeline")
+      (para "**Send Path:**")
+      (code "Application Data
+    ↓
+IF protoOpts & 0x01: Compress with ZLIB
+    ↓
+IF protoOpts & 0x02: Encrypt with AES-256-GCM
+    ↓
+Chunk into 1024-byte pieces
+    ↓
+FOR each chunk:
+  - Build 16-byte header
+  - Prepend to chunk data
+  - Pass to Transport Layer (HMAC + send)")
+      (para "**Receive Path:**")
+      (code "Validated Payload from Transport Layer
+    ↓
+Parse 16-byte header
+    ↓
+Buffer chunk by (channelID, sequence)
+    ↓
+Check deduplication cache (if dup: DROP)
+    ↓
+IF all chunks received:
+  - Reassemble in chunk order
+  - IF protoOpts & 0x02: Decrypt with AES-256-GCM
+  - IF protoOpts & 0x01: Decompress with ZLIB
+  - Dispatch to application callback"))
+    (subsection
+      (heading "Handler Responsibilities")
+      (para "**Receive Path:**")
+      (code "1. Verify first byte is 0x01
+2. Parse 16-byte header
+3. Extract channelID, sequence, chunkIndex, totalChunks, protoOpts
+4. Buffer management:
+   a. Create buffer entry if not exists
+   b. Store chunk at chunkIndex
+   c. Check if all chunks received
+5. If complete:
+   a. Reassemble chunks
+   b. Decrypt (if protoOpts & 0x02)
+   c. Decompress (if protoOpts & 0x01)
+   d. Dispatch to application
+   e. Remove from buffer
+6. Periodic cleanup of stale buffers (60s timeout)")
+      (para "**Send Path:**")
+      (code "1. Get next sequence number for channel
+2. Compress (if protoOpts & 0x01)
+3. Encrypt (if protoOpts & 0x02)
+4. Chunk processed data
+5. FOR each chunk:
+   a. Build header (proto=0x01, protoOpts, channelID, sequence, chunkIndex, totalChunks)
+   b. Payload = header + chunk_data
+   c. Pass to Transport Layer"))
+    (subsection
+      (heading "Use Cases")
+      (item "Large messages (>1KB)")
+      (item "Compressed data (logs, JSON, text)")
+      (item "Encrypted data (sensitive information)")
+      (item "High-throughput streams")
+      (item "Binary protocols (Protobuf, MessagePack, CBOR)")))
+  (section
+    (heading "Protocol Router")
+    (subsection
+      (heading "Purpose")
+      (para "Route validated payloads to appropriate protocol handler based on Protocol ID."))
+    (subsection
+      (heading "Architecture")
+      (para "**Python:**")
+      (code "class ProtocolRouter:
+    def __init__(self):
+        self._handlers = {}  # Dict[int, ProtocolHandler]
+
+    def register(self, protocol_id: int, handler: ProtocolHandler):
+        \"\"\"Register protocol handler.\"\"\"
+        self._handlers[protocol_id] = handler
+
+    async def route(self, payload: bytes):
+        \"\"\"Route payload to handler by protocol ID.\"\"\"
+        if not payload:
+            return  # Empty payload
+
+        protocol_id = payload[0]
+
+        handler = self._handlers.get(protocol_id)
+        if handler is None:
+            logger.error(f\"Unknown protocol ID: {protocol_id:02x}\")
+            return  # Drop packet
+
+        await handler.handle(payload)")
+      (para "**Swift:**")
+      (code "actor ProtocolRouter {
+    private var handlers: [UInt8: ProtocolHandler] = [:]
+
+    func register(protocolID: UInt8, handler: ProtocolHandler) {
+        handlers[protocolID] = handler
+    }
+
+    func route(payload: Data) async {
+        guard !payload.isEmpty else { return }
+
+        let protocolID = payload[0]
+
+        guard let handler = handlers[protocolID] else {
+            print(\"Unknown protocol ID: \\(String(format: \"0x%02x\", protocolID))\")
+            return
+        }
+
+        await handler.handle(payload: payload)
+    }
+}"))
+    (subsection
+      (heading "Handler Interface")
+      (para "**Python:**")
+      (code "class ProtocolHandler(Protocol):
+    async def handle(self, payload: bytes):
+        \"\"\"Process received payload.\"\"\"
+        ...
+
+    async def send(self, data: bytes, host: str, port: int):
+        \"\"\"Send data using this protocol.\"\"\"
+        ...")
+      (para "**Swift:**")
+      (code "protocol ProtocolHandler {
+    func handle(payload: Data) async
+    func send(data: Data, to host: String, port: Int) async throws
+}"))
+    (subsection
+      (heading "Registration")
+      (para "**Python:**")
+      (code "router = ProtocolRouter()
+router.register(0x00, text_protocol)
+router.register(0x01, binary_protocol)")
+      (para "**Swift:**")
+      (code "let router = ProtocolRouter()
+await router.register(protocolID: 0x00, handler: textProtocol)
+await router.register(protocolID: 0x01, handler: binaryProtocol)")))
+  (section
+    (heading "Layer Interactions")
+    (subsection
+      (heading "Send Path (Application → Network)")
+      (code "APPLICATION LAYER
+    ↓ (message to send)
+PROTOCOL LAYER
+    ├─ Protocol 0: Prepend 0x00, UTF-8 encode
+    └─ Protocol 1: Compress → Encrypt → Chunk → Build headers
+    ↓ (payload bytes)
+TRANSPORT LAYER
+    ├─ Compute HMAC (GUID + Payload)
+    ├─ Build packet [HMAC(16) + GUID(6) + Payload]
+    └─ Send UDP datagram
+    ↓
+NETWORK LAYER"))
+    (subsection
+      (heading "Receive Path (Network → Application)")
+      (code "NETWORK LAYER
+    ↓ (UDP datagram)
+TRANSPORT LAYER
+    ├─ Parse packet [HMAC + GUID + Payload]
+    ├─ Validate HMAC (constant-time)
+    ├─ Check replay protection
+    └─ Check rate limiting
+    ↓ (validated payload)
+PROTOCOL LAYER (ROUTER)
+    ├─ Extract protocol ID (first byte)
+    └─ Route to handler (TextProtocol or BinaryProtocol)
+    ↓
+PROTOCOL HANDLER
+    ├─ Protocol 0: Decode UTF-8, parse JSON
+    └─ Protocol 1: Reassemble → Decrypt → Decompress
+    ↓ (decoded message)
+APPLICATION LAYER")))
+  (section
+    (heading "Design Principles")
+    (subsection
+      (heading "1. Separation of Concerns")
+      (item "Transport Layer: Security and delivery")
+      (item "Protocol Layer: Encoding and reassembly")
+      (item "Application Layer: Business logic"))
+    (subsection
+      (heading "2. Protocol Agnostic Transport")
+      (item "Transport Layer doesn't care about protocol format")
+      (item "Payload is opaque bytes to Transport Layer")
+      (item "Protocol Layer adds structure"))
+    (subsection
+      (heading "3. Extensibility")
+      (item "New protocols can be added without changing Transport Layer")
+      (item "Handler interface defines contract")
+      (item "Router dynamically dispatches"))
+    (subsection
+      (heading "4. Channel Isolation")
+      (item "Protocol 1 channels don't interfere")
+      (item "Enables concurrent message streams")
+      (item "Per-channel sequence counters"))
+    (subsection
+      (heading "5. Compression Before Encryption")
+      (item "Compression more effective on plaintext")
+      (item "Encrypted data appears random (incompressible)")
+      (item "Order: Compress → Encrypt → Chunk"))
+    (subsection
+      (heading "6. Encrypt Before Chunking")
+      (item "Encryption applied to FULL message")
+      (item "Prevents attacks on partial ciphertexts")
+      (item "Simpler key management")))
+  (section
+    (heading "Performance Characteristics")
+    (subsection
+      (heading "Protocol 0 (Text)")
+      (item "**Latency:** Lowest (single packet, no processing)")
+      (item "**Throughput:** Limited by MTU (~1450 bytes/message)")
+      (item "**CPU:** Minimal (JSON encoding only)")
+      (item "**Use Case:** Low-latency RPC, commands, status"))
+    (subsection
+      (heading "Protocol 1 (Binary, 0x00)")
+      (item "**Latency:** Low (chunking overhead only)")
+      (item "**Throughput:** Unlimited (2^32 chunks)")
+      (item "**CPU:** Minimal (chunking only)")
+      (item "**Use Case:** Large binary data"))
+    (subsection
+      (heading "Protocol 1 (Binary, 0x01 Compressed)")
+      (item "**Latency:** Medium (compression overhead)")
+      (item "**Throughput:** High (reduced bandwidth)")
+      (item "**CPU:** Medium (ZLIB compression)")
+      (item "**Use Case:** Large compressible data (logs, JSON, text)"))
+    (subsection
+      (heading "Protocol 1 (Binary, 0x02 Encrypted)")
+      (item "**Latency:** Medium (encryption overhead)")
+      (item "**Throughput:** Unlimited")
+      (item "**CPU:** Medium (AES-GCM)")
+      (item "**Use Case:** Sensitive data"))
+    (subsection
+      (heading "Protocol 1 (Binary, 0x03 Both)")
+      (item "**Latency:** Highest (compression + encryption)")
+      (item "**Throughput:** High (compression reduces size)")
+      (item "**CPU:** High (both operations)")
+      (item "**Use Case:** Large sensitive data")))
+  (section
+    (heading "Protocol Selection Guide")
+    (subsection
+      (heading "When to Use Protocol 0 (Text)")
+      (para "✅ **Good For:**")
+      (item "RPC method calls (< 1KB payloads)")
+      (item "Configuration messages")
+      (item "Status requests")
+      (item "Debugging (human-readable)")
+      (item "Command/control messages")
+      (para "❌ **NOT Good For:**")
+      (item "Large messages (>1KB)")
+      (item "Binary data")
+      (item "Sensitive data (no encryption)")
+      (item "High-throughput streams"))
+    (subsection
+      (heading "When to Use Protocol 1 (Binary)")
+      (para "✅ **Good For:**")
+      (item "Large messages (>1KB)")
+      (item "Binary protocols (Protobuf, MessagePack)")
+      (item "High-throughput data streams")
+      (item "Sensitive data (with encryption)")
+      (item "Compressible data (with compression)")
+      (para "❌ **NOT Good For:**")
+      (item "Simple RPC calls (overkill)")
+      (item "Maximum latency sensitivity (chunking overhead)")
+      (item "Debugging (not human-readable)")))
+  (section
+    (heading "Testing Requirements")
+    (subsection
+      (heading "Protocol 0 Tests")
+      (item "[ ] Simple JSON message")
+      (item "[ ] Large JSON (>1KB, near MTU)")
+      (item "[ ] Invalid JSON rejection")
+      (item "[ ] UTF-8 encoding/decoding")
+      (item "[ ] Cross-language compatibility"))
+    (subsection
+      (heading "Protocol 1 Tests")
+      (item "[ ] Single chunk message")
+      (item "[ ] Multi-chunk message (>1KB)")
+      (item "[ ] Compression (protoOpts 0x01)")
+      (item "[ ] Encryption (protoOpts 0x02)")
+      (item "[ ] Compression + encryption (protoOpts 0x03)")
+      (item "[ ] Channel isolation")
+      (item "[ ] Stale buffer cleanup")
+      (item "[ ] Deduplication")
+      (item "[ ] Cross-language compatibility"))
+    (subsection
+      (heading "Protocol Router Tests")
+      (item "[ ] Route Protocol 0 to TextProtocol")
+      (item "[ ] Route Protocol 1 to BinaryProtocol")
+      (item "[ ] Unknown protocol ID rejected")
+      (item "[ ] Empty payload handled")))
+  (section
+    (heading "Implementation Checklist")
+    (subsection
+      (heading "Python Implementation")
+      (item "[ ] TextProtocol class with handle() and send()")
+      (item "[ ] BinaryProtocol class with handle() and send()")
+      (item "[ ] ProtocolRouter with registration and routing")
+      (item "[ ] Protocol 0 tests passing")
+      (item "[ ] Protocol 1 tests passing")
+      (item "[ ] Router tests passing"))
+    (subsection
+      (heading "Swift Implementation")
+      (item "[ ] TextProtocol actor with handle() and send()")
+      (item "[ ] BinaryProtocol actor with handle() and send()")
+      (item "[ ] ProtocolRouter actor with registration and routing")
+      (item "[ ] Protocol 0 tests passing")
+      (item "[ ] Protocol 1 tests passing")
+      (item "[ ] Router tests passing"))
+    (subsection
+      (heading "Cross-Language Validation")
+      (item "[ ] Protocol 0: Python → Swift")
+      (item "[ ] Protocol 0: Swift → Python")
+      (item "[ ] Protocol 1 (0x00): Python → Swift")
+      (item "[ ] Protocol 1 (0x01): Python → Swift")
+      (item "[ ] Protocol 1 (0x02): Python → Swift")
+      (item "[ ] Protocol 1 (0x03): Python → Swift")
+      (item "[ ] All combinations (N²) tested")))
+  (section
+    (heading "Version History")
+    (item "**1.0.0** (2026-01-18): Initial specification"))
+  (section
+    (heading "References")
+    (para "**Related Specifications:**")
+    (item "`specs/technical/yx-protocol-spec.sxp` - Complete protocol details")
+    (item "`specs/architecture/security-architecture.sxp` - Security layer")
+    (item "`specs/testing/interoperability-requirements.sxp` - Testing requirements")
+    (item "`specs/technical/default-values.sxp` - Default configurations")))

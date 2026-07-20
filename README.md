@@ -59,7 +59,7 @@ package. Three executables ship with it:
   `org.spy.yx`, account = mesh name. Key resolution order (`MeshKey`): `--key` flag >
   `YX_KEY` env > Keychain > built-in dev key (with a loud warning). Python mirrors
   this via `security` in `src/python/yx_key.py`.
-  Spec: `protocol/specs/architecture/key-management.md`.
+  Spec: `protocol/specs/architecture/key-management.sxp`.
 - **`yxnode`** — base mesh node daemon and the canonical "how to build a service on
   yx" example: heartbeats presence (`node.hello`), answers `node.info` RPC, and on
   inbound `msg.deliver` writes a Unified Node Format (UNF) markdown file (YAML
@@ -68,9 +68,9 @@ package. Three executables ship with it:
   spec-proof only. Proven: two-node mutual discovery + cross-language delivery
   (Swift node ↔ Python node), keyed from the Keychain.
 
-ADRs live in `protocol/specs/architecture/ybs-decisions.md`: D08 Keychain keys ·
+ADRs live in `protocol/specs/architecture/ybs-decisions.sxp`: D08 Keychain keys ·
 D09 Swift-first · D10 pluggable discovery (UDP broadcast now, Bonjour/mDNS later).
-See `docs/yx.md` for the executive summary and `BUILD_STATUS.md` for current status.
+See `docs/yx.sxp` for the executive summary and `BUILD_STATUS.sxp` for current status.
 
 ## History / branches
 

@@ -1,0 +1,44 @@
+(doc
+  (title "Technical Specifications — Swift System-Wide Defaults")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "System" "YX Swift Implementation")
+  (kv "Category" "Technical")
+  (kv "Type" "BASE")
+  (kv "Version" "0.1.0")
+  (kv "Last Updated" "2026-04-11")
+  (section
+    (heading "Language Version")
+    (kv "Minimum" "Swift 5.9")
+    (kv "Recommended" "Swift 5.10+")
+    (item "Reason: parameter packs (5.9), improved `Sendable` checking (5.10)"))
+  (section
+    (heading "Package Management")
+    (kv "Tool" "Swift Package Manager (`Package.swift`)")
+    (item "No CocoaPods, no Carthage")
+    (item "All targets declared in `Package.swift`"))
+  (section
+    (heading "Coding Standards")
+    (item "`struct` preferred over `class` for data types (value semantics)")
+    (item "`enum` with associated values for result types and errors")
+    (item "`throws` / `try` for error handling, not optional chaining for errors")
+    (item "`Sendable` conformance required for types crossing concurrency boundaries")
+    (item "Property names: `lowerCamelCase`; type names: `UpperCamelCase`"))
+  (section
+    (heading "Concurrency Model")
+    (item "Swift `async/await` for async operations")
+    (item "`Actor` for shared mutable state (e.g., replay window store, rate limiter)")
+    (item "`Task` for fire-and-forget; `TaskGroup` for structured concurrency")
+    (item "No `DispatchQueue` for new code"))
+  (section
+    (heading "Cryptography")
+    (kv "Framework" "`CryptoKit` (Apple-native, no third-party dependency)")
+    (item "`HMAC<SHA256>` for authentication")
+    (item "`AES.GCM` for encryption")
+    (item "Constant-time comparison via `CryptoKit.HMAC.isValidAuthenticationCode`"))
+  (section
+    (heading "Module Structure Convention")
+    (code "Sources/YXProtocol/
+├── Primitives/    # Pure computation: GUIDFactory, DataCrypto
+└── Transport/     # I/O and packet: Packet, PacketBuilder, UDPSocket")
+    (para "Same layering constraint as Python: `Primitives` has no I/O.")))

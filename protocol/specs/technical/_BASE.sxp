@@ -1,0 +1,42 @@
+(doc
+  (title "Technical Specifications — System-Wide Defaults")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "System" "YX Protocol")
+  (kv "Category" "Technical")
+  (kv "Type" "BASE (applies to all technical specs in this category)")
+  (kv "Version" "0.1.0")
+  (kv "Last Updated" "2026-04-11")
+  (section
+    (heading "Wire Format Invariants")
+    (para "These rules apply to every YX packet regardless of implementation language. Any spec in `technical/` may rely on these without re-stating them.")
+    (subsection
+      (heading "Packet Layout")
+      (code "[HMAC 16 bytes][GUID 6 bytes][PAYLOAD N bytes]")
+      (kv "HMAC" "First 16 bytes of HMAC-SHA256(key, GUID || PAYLOAD)")
+      (kv "GUID" "6-byte cryptographically-random identifier")
+      (kv "PAYLOAD" "Variable-length, format determined by Protocol Layer byte"))
+    (subsection
+      (heading "Encoding")
+      (item "All multi-byte integers: **big-endian**")
+      (item "Strings in payload: **UTF-8**")
+      (item "Binary data in payload: raw bytes, no base64")
+      (item "HMAC computation: `HMAC-SHA256(key, guid_bytes + payload_bytes)`, truncated to 16 bytes"))
+    (subsection
+      (heading "Cross-Language Compatibility")
+      (para "All implementations MUST produce **byte-identical** packets for identical inputs.")
+      (item "Same key + GUID + payload → same HMAC bytes")
+      (item "Same HMAC + GUID + payload → same serialized packet"))
+    (subsection
+      (heading "Minimum Packet Size")
+      (item "Minimum: 22 bytes (16 HMAC + 6 GUID + 0 payload)")
+      (item "Maximum: transport MTU (implementation-defined, typically 65507 for UDP)")))
+  (section
+    (heading "Security Defaults")
+    (item "HMAC key length: 32 bytes")
+    (item "Replay window: 300 seconds")
+    (item "Rate limit: 10,000 requests per 60 seconds per sender")
+    (item "These values are normative unless explicitly overridden by a spec"))
+  (section
+    (heading "Versioning")
+    (para "All technical specs use semantic versioning starting at `0.1.0`. Breaking wire-format changes require a major version bump.")))

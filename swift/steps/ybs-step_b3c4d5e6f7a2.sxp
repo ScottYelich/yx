@@ -1,0 +1,134 @@
+(doc
+  (title "Step 10: Swift Integration Tests")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "Version" "0.1.0")
+  (section
+    (heading "Overview")
+    (para "Create end-to-end integration tests for Swift implementation."))
+  (section
+    (heading "What This Step Builds")
+    (para "Builds end-to-end integration tests verifying the complete packet flow with real UDP loopback sockets: `build → serialize → send → receive → parse → validate`."))
+  (section
+    (heading "Step Objectives")
+    (item "1. Test complete packet flow")
+    (item "2. Test send/receive (when async supported)")
+    (item "3. Integration test coverage"))
+  (section
+    (heading "Prerequisites")
+    (item "Step 9 completed (canonical validation passed)"))
+  (section
+    (heading "Traceability")
+    (kv "Implements" "protocol/specs/testing/testing-strategy.sxp § Category 5: Integration Tests"))
+  (section
+    (heading "Instructions")
+    (subsection
+      (heading "Before Starting — Record Start Time")
+      (para "Record the current timestamp in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ` This is used for duration calculation in the DONE file."))
+    (subsection
+      (heading "1. Create Integration Tests")
+      (para "Create `Tests/YXProtocolTests/Integration/PacketFlowTests.swift`:")
+      (code "import XCTest
+import CryptoKit
+@testable import YXProtocol
+
+final class PacketFlowTests: XCTestCase {
+    func testCompletePacketFlow() throws {
+        let key = SymmetricKey(data: Data(repeating: 0x00, count: 32))
+        let guid = Data(repeating: 0xaa, count: 6)
+        let payload = Data(\"integration test payload\".utf8)
+
+        // Build
+        let packet = try PacketBuilder.buildPacket(guid: guid, payload: payload, key: key)
+
+        // Serialize
+        let data = packet.toBytes()
+
+        // Parse
+        let parsed = PacketBuilder.parsePacket(data)
+        XCTAssertNotNil(parsed)
+
+        // Validate
+        let isValid = PacketBuilder.validateHMAC(parsed!, key: key)
+        XCTAssertTrue(isValid)
+
+        // Verify payload
+        XCTAssertEqual(parsed?.payload, payload)
+    }
+
+    func testMultiplePackets() throws {
+        let key = SymmetricKey(data: Data(repeating: 0x00, count: 32))
+
+        for i in 0..<10 {
+            let payload = Data(\"packet \\\\(i)\".utf8)
+            let packet = try PacketBuilder.buildPacket(guid: Data(repeating: 0x01, count: 6), payload: payload, key: key)
+
+            let data = packet.toBytes()
+            let parsed = PacketBuilder.parseAndValidate(data, key: key)
+
+            XCTAssertNotNil(parsed)
+            XCTAssertEqual(parsed?.payload, payload)
+        }
+    }
+
+    func testInvalidKeyRejected() throws {
+        let sendKey = SymmetricKey(data: Data(repeating: 0x00, count: 32))
+        let recvKey = SymmetricKey(data: Data(repeating: 0xff, count: 32))
+
+        let data = try PacketBuilder.buildAndSerialize(guid: Data(repeating: 0x01, count: 6), payload: Data(\"test\".utf8), key: sendKey)
+
+        let packet = PacketBuilder.parseAndValidate(data, key: recvKey)
+
+        XCTAssertNil(packet, \"Packet with wrong key should be rejected\")
+    }
+}"))
+    (subsection
+      (heading "2. Run Tests")
+      (code "swift test --filter PacketFlowTests")))
+  (section
+    (heading "Verification")
+    (item "[ ] All integration tests pass")
+    (item "[ ] Complete flow works")
+    (item "[ ] Invalid keys rejected")
+    (code "swift test"))
+  (section
+    (heading "Notes")
+    (item "Swift implementation complete")
+    (item "Wire format compatible with Python")
+    (item "Ready for cross-language interop tests"))
+  (section
+    (heading "Documentation")
+    (para "**Record end time** and calculate duration (end − start timestamp).")
+    (para "Create `docs/build-history/ybs-step_b3c4d5e6f7a2-DONE.txt`:")
+    (code "STEP ybs-step_b3c4d5e6f7a2: Swift Integration Tests
+STARTED:    [start timestamp from Before Starting]
+COMPLETED:  [ISO 8601 timestamp]
+DURATION:   [minutes]
+
+OBJECTIVES COMPLETED:
+[copy from Step Objectives above]
+
+FILES CREATED/MODIFIED:
+- Tests/YXProtocolTests/Integration/PacketFlowTests.swift
+
+VERIFICATION: PASSED (attempt [N])
+
+NEXT STEP: ybs-step_g1h2i3j4k5l6 (Protocol 0 (Text/JSON-RPC))")
+    (para "Update `BUILD_STATUS.sxp`: mark this step `[x]` and update **Last Updated** timestamp."))
+  (section
+    (heading "Success Criteria")
+    (para "This step is successful when:")
+    (item "1. All verification checks pass (within 3 attempts)")
+    (item "2. All required files exist and are valid")
+    (item "3. Build compiles/runs without errors")
+    (item "4. DONE file created in `docs/build-history/`")
+    (item "5. `BUILD_STATUS.sxp` updated"))
+  (section
+    (heading "Next Steps")
+    (para "After completing this step, proceed to:")
+    (kv "Next" "`ybs-step_g1h2i3j4k5l6` — Protocol 0 (Text/JSON-RPC)"))
+  (section
+    (heading "Version History")
+    (subsection
+      (heading "0.1.0 (2026-04-11)")
+      (item "Initial step creation"))))

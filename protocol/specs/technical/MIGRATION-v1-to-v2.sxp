@@ -1,0 +1,516 @@
+(doc
+  (title "YX Protocol Migration Guide: v1.0 → v2.0")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "**Document Version:** 1.0 **Date:** 2025-10-19 **Target Audience:** Developers upgrading YX Framework implementations")
+  (section
+    (heading "Table of Contents")
+    (item "1. [Overview](#overview)")
+    (item "2. [Breaking Changes](#breaking-changes)")
+    (item "3. [What Stays the Same](#what-stays-the-same)")
+    (item "4. [Migration Strategy](#migration-strategy)")
+    (item "5. [Code Changes Required](#code-changes-required)")
+    (item "6. [Testing Strategy](#testing-strategy)")
+    (item "7. [Rollback Plan](#rollback-plan)")
+    (item "8. [FAQ](#faq)"))
+  (section
+    (heading "Overview")
+    (para "YX Protocol v2.0 introduces a **channel-based architecture** for Protocol 1 (Binary) to eliminate message ID collision risks and enable logical stream isolation. This is a **breaking change** for binary protocol users.")
+    (subsection
+      (heading "Who Needs to Migrate?")
+      (para "✅ **You MUST migrate if:**")
+      (item "You use Protocol 1 (Binary) for large messages, compression, or encryption")
+      (item "You have peers communicating over YX binary protocol")
+      (item "You want to use the new channel isolation features")
+      (para "✅ **You DON'T need to migrate if:**")
+      (item "You only use Protocol 0 (Text/JSON-RPC) - **fully compatible**")
+      (item "You're starting a new project - use v2.0 from the start"))
+    (subsection
+      (heading "Migration Timeline")
+      (para "**Recommended Approach:** Flag day upgrade (all peers simultaneously)")
+      (para "**Why:** v1.0 and v2.0 binary protocols are **incompatible**. Mixed deployments will fail to communicate over Protocol 1.")))
+  (section
+    (heading "Breaking Changes")
+    (subsection
+      (heading "1. Protocol 1 Header Format")
+      (para "**v1.0 Header (16 bytes):**")
+      (code "Offset  Field         Size    Type      Description
+------  ------------  ------  --------  ---------------------------
+0       protoID       1       uint8     0x01 (binary)
+1       protoOpts     1       uint8     Compress/encrypt flags
+2       msgID         1       uint8     Message ID (0-255)
+3       meta          1       uint8     Metadata (reserved)
+4-7     chunkIndex    4       uint32be  Chunk index
+8-11    totalChunks   4       uint32be  Total chunks
+12-15   reserved      4       uint32be  Reserved (0)")
+      (para "**v2.0 Header (16 bytes):**")
+      (code "Offset  Field         Size    Type      Description
+------  ------------  ------  --------  ---------------------------
+0       protoID       1       uint8     0x01 (binary)
+1       protoOpts     1       uint8     Compress/encrypt flags
+2-3     channelID     2       uint16be  Logical channel (0-65535)
+4-7     sequence      4       uint32be  Per-channel sequence (0-4.3B)
+8-11    chunkIndex    4       uint32be  Chunk index
+12-15   totalChunks   4       uint32be  Total chunks")
+      (para "**Key Differences:**")
+      (item "`msgID` (1 byte) → `channelID` (2 bytes)")
+      (item "`meta` (1 byte) → part of `sequence` (4 bytes)")
+      (item "`reserved` (4 bytes) → removed (absorbed by `channelID` + `sequence`)"))
+    (subsection
+      (heading "2. Buffer Key Change")
+      (para "**v1.0:**")
+      (code "buffer_key = msgID  # 0-255
+buffers[msgID] = {chunkIndex: chunk_data}")
+      (para "**v2.0:**")
+      (code "buffer_key = (channelID, sequence)  # (0-65535, 0-4.3B)
+buffers[(channelID, sequence)] = {chunkIndex: chunk_data}"))
+    (subsection
+      (heading "3. Sequence Management")
+      (para "**v1.0:**")
+      (item "Random msgID per message (0-255)")
+      (item "No tracking required")
+      (item "High collision risk (~50% at 16 concurrent messages)")
+      (para "**v2.0:**")
+      (item "Per-channel sequence counters")
+      (item "Linear increment: 0, 1, 2, 3, ...")
+      (item "Must track `_sequences = {channelID: next_seq}`")))
+  (section
+    (heading "What Stays the Same")
+    (subsection
+      (heading "✅ No Changes To:")
+      (item "1. **Protocol 0 (Text/JSON-RPC)**: Fully compatible")
+      (item "2. **Packet structure**: HMAC (16) + GUID (6) + Payload")
+      (item "3. **HMAC computation**: Still HMAC-SHA256(GUID + Payload)[:16]")
+      (item "4. **Encryption**: Still AES-256-GCM with 12-byte nonce")
+      (item "5. **Compression**: Still zlib")
+      (item "6. **Processing order**: Compress → Encrypt → Chunk (send)")
+      (item "7. **Processing order**: Reassemble → Decrypt → Decompress (receive)")
+      (item "8. **protoOpts bitfield**: Same values (0x00-0x03)")
+      (item "9. **Chunk size**: Still 1024 bytes default")
+      (item "10. **Buffer timeout**: Still 60 seconds"))
+    (subsection
+      (heading "✅ Compatible Features:")
+      (item "Protocol 0 peers can still communicate (no binary protocol used)")
+      (item "Shared keys remain the same format (32 bytes / 64 hex chars)")
+      (item "GUID format unchanged (6 bytes)")
+      (item "UDP broadcast behavior unchanged")))
+  (section
+    (heading "Migration Strategy")
+    (subsection
+      (heading "Option A: Flag Day Upgrade (Recommended)")
+      (para "**Best For:** Controlled environments, small deployments")
+      (para "**Steps:**")
+      (item "1. **Preparation Phase (Week 1-2)**")
+      (item "Update all codebases to v2.0")
+      (item "Run integration tests in isolated environment")
+      (item "Document rollback procedure")
+      (item "2. **Deployment Phase (Day 1)**")
+      (item "Schedule maintenance window (all peers offline)")
+      (item "Deploy v2.0 to ALL peers simultaneously")
+      (item "Start all peers")
+      (item "Verify connectivity")
+      (item "3. **Verification Phase (Day 1-2)**")
+      (item "Monitor logs for errors")
+      (item "Test Protocol 1 communication")
+      (item "Run end-to-end tests")
+      (para "**Downtime:** Required during deployment window")
+      (para "**Risk:** Low (if tested thoroughly)"))
+    (subsection
+      (heading "Option B: Protocol Version Negotiation (Future)")
+      (para "**Status:** Not implemented in v2.0")
+      (para "**Concept:**")
+      (item "Peers advertise supported protocol versions")
+      (item "Fall back to v1.0 if v2.0 not supported")
+      (item "Allows gradual rollout")
+      (para "**Availability:** Planned for v2.1+")))
+  (section
+    (heading "Code Changes Required")
+    (subsection
+      (heading "Python Implementation")
+      (subsection
+        (heading "1. Update Header Encoding")
+        (para "**Before (v1.0):**")
+        (code "def _encode_header(self, msg_id, chunk_index, total_chunks, proto_opts):
+    return struct.pack('>BBBBIII',
+        0x01,           # protoID
+        proto_opts,     # protoOpts
+        msg_id,         # msgID (1 byte)
+        0,              # meta (reserved)
+        chunk_index,    # chunkIndex
+        total_chunks,   # totalChunks
+        0               # reserved
+    )")
+        (para "**After (v2.0):**")
+        (code "def _encode_header(self, channel_id, sequence, chunk_index, total_chunks, proto_opts):
+    return struct.pack('>BBHIII',
+        0x01,           # protoID
+        proto_opts,     # protoOpts
+        channel_id,     # channelID (2 bytes, big-endian)
+        sequence,       # sequence (4 bytes, big-endian)
+        chunk_index,    # chunkIndex
+        total_chunks    # totalChunks
+        # No reserved field
+    )"))
+      (subsection
+        (heading "2. Update Header Decoding")
+        (para "**Before (v1.0):**")
+        (code "def _decode_header(self, header):
+    proto_id, proto_opts, msg_id, meta, chunk_idx, total_chunks, reserved = \\
+        struct.unpack('>BBBBIII', header)
+    return {
+        'proto_id': proto_id,
+        'proto_opts': proto_opts,
+        'msg_id': msg_id,
+        'chunk_index': chunk_idx,
+        'total_chunks': total_chunks
+    }")
+        (para "**After (v2.0):**")
+        (code "def _decode_header(self, header):
+    proto_id, proto_opts, channel_id, sequence, chunk_idx, total_chunks = \\
+        struct.unpack('>BBHIII', header)
+    return {
+        'proto_id': proto_id,
+        'proto_opts': proto_opts,
+        'channel_id': channel_id,      # NEW
+        'sequence': sequence,            # NEW
+        'chunk_index': chunk_idx,
+        'total_chunks': total_chunks
+    }"))
+      (subsection
+        (heading "3. Add Sequence Tracking")
+        (para "**New in v2.0:**")
+        (code "class BinaryProtocol:
+    def __init__(self, key, chunk_size=1024):
+        self.key = key
+        self.chunk_size = chunk_size
+        self._buffers = {}
+        self._sequences = {}  # NEW: {channelID: next_sequence}
+
+    def _get_next_sequence(self, channel_id):
+        \"\"\"Get next sequence number for channel\"\"\"
+        seq = self._sequences.get(channel_id, 0)
+        self._sequences[channel_id] = (seq + 1) % (2**32)
+        return seq"))
+      (subsection
+        (heading "4. Update Buffer Key")
+        (para "**Before (v1.0):**")
+        (code "async def handle(self, payload):
+    header = self._decode_header(payload[:16])
+    msg_id = header['msg_id']
+
+    # Buffer by msgID
+    if msg_id not in self._buffers:
+        self._buffers[msg_id] = {}
+
+    self._buffers[msg_id][header['chunk_index']] = chunk_data
+
+    if len(self._buffers[msg_id]) == header['total_chunks']:
+        # Reassemble
+        complete = b''.join(self._buffers[msg_id][i] for i in range(total_chunks))
+        del self._buffers[msg_id]")
+        (para "**After (v2.0):**")
+        (code "async def handle(self, payload):
+    header = self._decode_header(payload[:16])
+    channel_id = header['channel_id']
+    sequence = header['sequence']
+
+    # Buffer by (channelID, sequence) tuple
+    buffer_key = (channel_id, sequence)
+    if buffer_key not in self._buffers:
+        self._buffers[buffer_key] = {}
+
+    self._buffers[buffer_key][header['chunk_index']] = chunk_data
+
+    if len(self._buffers[buffer_key]) == header['total_chunks']:
+        # Reassemble
+        complete = b''.join(self._buffers[buffer_key][i] for i in range(total_chunks))
+        del self._buffers[buffer_key]"))
+      (subsection
+        (heading "5. Update Send API")
+        (para "**Before (v1.0):**")
+        (code "async def send(self, payload, proto_opts=0x00):
+    msg_id = random.randint(0, 255)  # Random msgID
+    # ... chunking logic ...
+    header = self._encode_header(msg_id, chunk_idx, total_chunks, proto_opts)")
+        (para "**After (v2.0):**")
+        (code "async def send(self, payload, proto_opts=0x00, channel_id=1):
+    sequence = self._get_next_sequence(channel_id)  # Linear sequence
+    # ... chunking logic ...
+    header = self._encode_header(channel_id, sequence, chunk_idx, total_chunks, proto_opts)")))
+    (subsection
+      (heading "Swift Implementation")
+      (subsection
+        (heading "1. Update Header Struct")
+        (para "**Before (v1.0):**")
+        (code "struct BinaryProtocolHeader {
+    let protoID: UInt8       // 0x01
+    let protoOpts: UInt8     // 0x00-0x03
+    let msgID: UInt8         // 0-255
+    let meta: UInt8          // reserved
+    let chunkIndex: UInt32   // big-endian
+    let totalChunks: UInt32  // big-endian
+    let reserved: UInt32     // big-endian
+}")
+        (para "**After (v2.0):**")
+        (code "struct BinaryProtocolHeader {
+    let protoID: UInt8       // 0x01
+    let protoOpts: UInt8     // 0x00-0x03
+    let channelID: UInt16    // 0-65535, big-endian
+    let sequence: UInt32     // 0-4.3B, big-endian
+    let chunkIndex: UInt32   // big-endian
+    let totalChunks: UInt32  // big-endian
+}"))
+      (subsection
+        (heading "2. Update Encoding")
+        (para "**Before (v1.0):**")
+        (code "func encodeHeader(msgID: UInt8, chunkIndex: UInt32, totalChunks: UInt32, protoOpts: UInt8) -> Data {
+    var header = Data()
+    header.append(0x01)                           // protoID
+    header.append(protoOpts)                      // protoOpts
+    header.append(msgID)                          // msgID
+    header.append(0)                              // meta
+    header.append(contentsOf: chunkIndex.bigEndianBytes)
+    header.append(contentsOf: totalChunks.bigEndianBytes)
+    header.append(contentsOf: UInt32(0).bigEndianBytes)  // reserved
+    return header
+}")
+        (para "**After (v2.0):**")
+        (code "func encodeHeader(channelID: UInt16, sequence: UInt32, chunkIndex: UInt32, totalChunks: UInt32, protoOpts: UInt8) -> Data {
+    var header = Data()
+    header.append(0x01)                           // protoID
+    header.append(protoOpts)                      // protoOpts
+    header.append(contentsOf: channelID.bigEndianBytes)   // channelID (2 bytes)
+    header.append(contentsOf: sequence.bigEndianBytes)    // sequence (4 bytes)
+    header.append(contentsOf: chunkIndex.bigEndianBytes)
+    header.append(contentsOf: totalChunks.bigEndianBytes)
+    return header  // No reserved field
+}"))
+      (subsection
+        (heading "3. Add Sequence Tracking")
+        (para "**New in v2.0:**")
+        (code "actor BinaryProtocol {
+    private var sequences: [UInt16: UInt32] = [:]  // [channelID: nextSequence]
+
+    private func getNextSequence(for channelID: UInt16) -> UInt32 {
+        let seq = sequences[channelID] ?? 0
+        sequences[channelID] = (seq + 1) % UInt32.max
+        return seq
+    }
+}"))
+      (subsection
+        (heading "4. Update Buffer Key")
+        (para "**Before (v1.0):**")
+        (code "private var buffers: [UInt8: [UInt32: Data]] = [:]  // [msgID: [chunkIndex: data]]")
+        (para "**After (v2.0):**")
+        (code "// Use tuple as buffer key
+private typealias BufferKey = String  // \"\\(channelID)-\\(sequence)\"
+private var buffers: [BufferKey: [UInt32: Data]] = [:]
+
+private func makeBufferKey(channelID: UInt16, sequence: UInt32) -> BufferKey {
+    return \"\\(channelID)-\\(sequence)\"
+}"))))
+  (section
+    (heading "Testing Strategy")
+    (subsection
+      (heading "1. Unit Tests")
+      (para "**Test Coverage Required:**")
+      (code "# Python Tests
+~/.pyenv/versions/yx-dev/bin/python3 -m pytest tests/test_binary_protocol_v2.py -v
+~/.pyenv/versions/yx-dev/bin/python3 -m pytest tests/test_interop_v2.py -v")
+      (code "# Swift Tests
+swift test --filter BinaryProtocolV2Tests")
+      (para "**Verify:**")
+      (item "✅ Header encoding/decoding (16 bytes)")
+      (item "✅ Big-endian byte order for channelID, sequence")
+      (item "✅ Sequence increment per channel")
+      (item "✅ Channel isolation (independent sequences)")
+      (item "✅ Multi-chunk reassembly with (channelID, sequence) key")
+      (item "✅ Compression + encryption still work"))
+    (subsection
+      (heading "2. Integration Tests")
+      (para "**Cross-Language Communication:**")
+      (code "# Terminal 1: Start Python peer
+cd src/python
+python -m yxCLI --port 9999
+
+# Terminal 2: Start Swift peer, send to Python
+cd src/swift/yx/yx
+.build/debug/yxCLI --port 9998 --peers \"localhost:9999\"")
+      (para "**Verify:**")
+      (item "✅ Python → Swift binary messages")
+      (item "✅ Swift → Python binary messages")
+      (item "✅ Large messages (>1024 bytes) chunk correctly")
+      (item "✅ Compression works cross-language")
+      (item "✅ Encryption works cross-language"))
+    (subsection
+      (heading "3. Load Testing")
+      (para "**Test Scenarios:**")
+      (code "# Test 1: High message rate on single channel
+for i in range(1000):
+    await protocol.send(data, channel_id=1)
+
+# Verify: Sequences 0-999 in order, no gaps
+
+# Test 2: Multiple channels simultaneously
+await asyncio.gather(
+    send_stream(channel_id=1, count=100),
+    send_stream(channel_id=2, count=100),
+    send_stream(channel_id=3, count=100)
+)
+
+# Verify: Each channel has sequences 0-99, no cross-contamination"))
+    (subsection
+      (heading "4. Compatibility Testing")
+      (para "**Negative Tests:**")
+      (code "# Test: v1.0 peer cannot parse v2.0 packet
+v2_packet = build_v2_packet(channel_id=42, sequence=10)
+v1_parser = V1BinaryProtocol()
+try:
+    v1_parser.parse(v2_packet)
+    assert False, \"Should have failed\"
+except Exception:
+    pass  # Expected: v1.0 cannot parse v2.0
+
+# Test: v2.0 peer cannot parse v1.0 packet
+v1_packet = build_v1_packet(msg_id=42)
+v2_parser = V2BinaryProtocol()
+try:
+    v2_parser.parse(v1_packet)
+    assert False, \"Should have failed\"
+except Exception:
+    pass  # Expected: v2.0 cannot parse v1.0")))
+  (section
+    (heading "Rollback Plan")
+    (subsection
+      (heading "Preparation")
+      (para "**Before Deployment:**")
+      (item "1. ✅ Tag v1.0 codebase in git: `git tag v1.0-stable`")
+      (item "2. ✅ Backup configuration files")
+      (item "3. ✅ Document current deployment state")
+      (item "4. ✅ Test rollback procedure in staging"))
+    (subsection
+      (heading "Rollback Steps")
+      (para "**If v2.0 deployment fails:**")
+      (code "# 1. Stop all v2.0 peers
+./bin/yxctl stop all
+
+# 2. Revert to v1.0 codebase
+git checkout v1.0-stable
+
+# 3. Rebuild
+cd src/python && pip install -e .
+cd src/swift/yx/yx && swift build
+
+# 4. Restart peers
+./bin/yxctl start all
+
+# 5. Verify connectivity
+./bin/yxctl ping all")
+      (para "**Rollback Window:** < 15 minutes (if tested)"))
+    (subsection
+      (heading "Partial Rollback Not Supported")
+      (para "⚠️ **WARNING**: Cannot run mixed v1.0/v2.0 deployment for Protocol 1 communication.")
+      (para "**Why:** Header formats are incompatible. Peers will fail to parse packets.")
+      (para "**Mitigation:** Use Protocol 0 (Text/JSON-RPC) for critical communication paths during migration window.")))
+  (section
+    (heading "FAQ")
+    (subsection
+      (heading "Q: Can I run v1.0 and v2.0 peers simultaneously?")
+      (para "**A:** ❌ No, not for Protocol 1 (Binary) communication. Protocol 0 (Text/JSON-RPC) will continue working, but binary protocol messages will fail to parse."))
+    (subsection
+      (heading "Q: What if I only use Protocol 0 (Text)?")
+      (para "**A:** ✅ No migration needed. Protocol 0 is fully compatible between v1.0 and v2.0."))
+    (subsection
+      (heading "Q: Can I migrate gradually (one peer at a time)?")
+      (para "**A:** ❌ No. All peers using Protocol 1 must upgrade simultaneously (flag day)."))
+    (subsection
+      (heading "Q: How do I choose which channel to use?")
+      (para "**A:** See channel allocation guidelines in `YX-PROTOCOL-SPEC-v2.sxp`. Use channel 1 for default RPC, 100+ for application data."))
+    (subsection
+      (heading "Q: What happens to in-flight messages during upgrade?")
+      (para "**A:** They will be lost. Drain message queues before shutdown, or design for message loss (idempotent operations)."))
+    (subsection
+      (heading "Q: Can I preserve old msgID behavior?")
+      (para "**A:** ⚠️ Not recommended. You could map msgID to channel 0, but you lose the benefits of v2.0. Better to fully migrate."))
+    (subsection
+      (heading "Q: Do shared keys need to change?")
+      (para "**A:** ❌ No. Shared keys remain 32 bytes, same format as v1.0."))
+    (subsection
+      (heading "Q: How do I test without disrupting production?")
+      (para "**A:** Use isolated test environment with separate ports (e.g., 19999 instead of 9999) and different shared keys."))
+    (subsection
+      (heading "Q: What's the rollback procedure if v2.0 fails?")
+      (para "**A:** See [Rollback Plan](#rollback-plan). Requires reverting all peers to v1.0 simultaneously."))
+    (subsection
+      (heading "Q: Is there a protocol version negotiation feature?")
+      (para "**A:** ❌ Not in v2.0. Planned for v2.1+. For now, use flag day upgrade only."))
+    (subsection
+      (heading "Q: Can I use the test key for migration?")
+      (para "**A:** ⚠️ Only in development/test environments. NEVER use test key in production."))
+    (subsection
+      (heading "Q: Why do my Swift tests crash with Signal 5 when using Data slices?")
+      (para "**A:** ⚠️ Swift 6 strict concurrency has a known issue with `Data.SubSequence` subscripting in tests. **Solution:** Convert to Array before subscripting:")
+      (code "// ❌ Problematic:
+let bytes = packet[2..<4]
+XCTAssertEqual(bytes[0], 0x12)  // Crashes in test suites!
+
+// ✅ Solution:
+let bytes = packet[2..<4]
+XCTAssertEqual(Array(bytes)[0], 0x12)  // Works!")
+      (para "This only affects test code. Production code should use `withUnsafeBytes` for byte access or `Data.prefix()`/`Data.suffix()` methods instead of slicing.")))
+  (section
+    (heading "Migration Checklist")
+    (para "Use this checklist for your deployment:")
+    (subsection
+      (heading "Pre-Migration")
+      (item "[ ] Read this guide completely")
+      (item "[ ] Review `YX-PROTOCOL-SPEC-v2.sxp`")
+      (item "[ ] Update all codebases to v2.0")
+      (item "[ ] Run unit tests (Python + Swift)")
+      (item "[ ] Run integration tests (Python ↔ Swift)")
+      (item "[ ] Test rollback procedure in staging")
+      (item "[ ] Schedule maintenance window")
+      (item "[ ] Notify stakeholders of downtime"))
+    (subsection
+      (heading "Migration Day")
+      (item "[ ] Stop all v1.0 peers")
+      (item "[ ] Verify all peers stopped")
+      (item "[ ] Deploy v2.0 codebase to all peers")
+      (item "[ ] Rebuild/reinstall v2.0")
+      (item "[ ] Start all v2.0 peers")
+      (item "[ ] Verify connectivity with `yxctl ping all`")
+      (item "[ ] Test Protocol 1 binary communication")
+      (item "[ ] Monitor logs for errors"))
+    (subsection
+      (heading "Post-Migration")
+      (item "[ ] Run end-to-end tests")
+      (item "[ ] Monitor performance metrics")
+      (item "[ ] Check buffer cleanup (no memory leaks)")
+      (item "[ ] Verify channel isolation working")
+      (item "[ ] Document lessons learned")
+      (item "[ ] Update runbooks"))
+    (subsection
+      (heading "If Rollback Needed")
+      (item "[ ] Stop all v2.0 peers")
+      (item "[ ] Revert to v1.0 codebase (`git checkout v1.0-stable`)")
+      (item "[ ] Rebuild v1.0")
+      (item "[ ] Start all v1.0 peers")
+      (item "[ ] Verify connectivity")
+      (item "[ ] Root cause analysis")
+      (item "[ ] Fix issues before retry")))
+  (section
+    (heading "Support")
+    (para "**Documentation:**")
+    (item "`YX-PROTOCOL-SPEC-v2.sxp` - Complete v2.0 specification")
+    (item "`YX-PROTOCOL-SPEC.md` - v1.0 specification (reference)")
+    (item "`CLAUDE.md` - Implementation guide")
+    (item "`YX-PROTOCOL-V2-WIP.md` - Development notes")
+    (para "**Testing:**")
+    (item "`src/python/tests/test_binary_protocol_v2.py` - Python unit tests")
+    (item "`src/python/tests/test_interop_v2.py` - Python integration tests")
+    (item "`src/swift/yx/yx/Tests/TransportTests/BinaryProtocolV2Tests.swift` - Swift tests")
+    (para "**Issues:**")
+    (item "Report issues to your team's issue tracker")
+    (item "Include logs, packet dumps, and reproduction steps")
+    (para "**End of Migration Guide**")
+    (para "**Version:** 1.0 **Last Updated:** 2025-10-19 **Maintained by:** YX Development Team")))

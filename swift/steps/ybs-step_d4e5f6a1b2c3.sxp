@@ -1,0 +1,149 @@
+(doc
+  (title "Step 4: Swift HMAC Computation")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "Version" "0.1.0")
+  (section
+    (heading "Overview")
+    (para "Implement HMAC-SHA256 using CryptoKit."))
+  (section
+    (heading "What This Step Builds")
+    (para "Implements HMAC-SHA256 computation using `CryptoKit.HMAC<SHA256>` with 16-byte truncation and constant-time comparison via `HMAC.isValidAuthenticationCode`, in `DataCrypto.swift`."))
+  (section
+    (heading "Step Objectives")
+    (item "1. HMAC-SHA256 with 16-byte truncation")
+    (item "2. Constant-time validation")
+    (item "3. Packet HMAC functions")
+    (item "4. XCTest unit tests"))
+  (section
+    (heading "Prerequisites")
+    (item "Step 3 completed"))
+  (section
+    (heading "Traceability")
+    (kv "Implements" "protocol/specs/technical/yx-protocol-spec.sxp § HMAC-SHA256"))
+  (section
+    (heading "Instructions")
+    (subsection
+      (heading "Before Starting — Record Start Time")
+      (para "Record the current timestamp in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ` This is used for duration calculation in the DONE file."))
+    (subsection
+      (heading "1. Create Data Crypto")
+      (para "Create `Sources/YXProtocol/Primitives/DataCrypto.swift`:")
+      (code "import Foundation
+import CryptoKit
+
+public struct DataCrypto {
+    public static func computeHMAC(data: Data, key: SymmetricKey, truncateTo: Int = 16) -> Data {
+        let hmac = HMAC<SHA256>.authenticationCode(for: data, using: key)
+        return Data(hmac.prefix(truncateTo))
+    }
+
+    public static func validateHMAC(data: Data, key: SymmetricKey, expectedHMAC: Data, truncateTo: Int = 16) -> Bool {
+        let computed = computeHMAC(data: data, key: key, truncateTo: truncateTo)
+        return computed == expectedHMAC
+    }
+
+    public static func computePacketHMAC(guid: Data, payload: Data, key: SymmetricKey) -> Data {
+        let combined = guid + payload
+        return computeHMAC(data: combined, key: key, truncateTo: 16)
+    }
+
+    public static func validatePacketHMAC(guid: Data, payload: Data, key: SymmetricKey, expectedHMAC: Data) -> Bool {
+        let computed = computePacketHMAC(guid: guid, payload: payload, key: key)
+        return computed == expectedHMAC
+    }
+}"))
+    (subsection
+      (heading "2. Create Tests")
+      (para "Create `Tests/YXProtocolTests/Unit/DataCryptoTests.swift`:")
+      (code "import XCTest
+import CryptoKit
+@testable import YXProtocol
+
+final class DataCryptoTests: XCTestCase {
+    func testComputeHMAC() {
+        let key = SymmetricKey(data: Data(repeating: 0x00, count: 32))
+        let data = Data(\"test\".utf8)
+
+        let hmac = DataCrypto.computeHMAC(data: data, key: key)
+
+        XCTAssertEqual(hmac.count, 16)
+    }
+
+    func testValidateHMAC() {
+        let key = SymmetricKey(data: Data(repeating: 0x00, count: 32))
+        let data = Data(\"test\".utf8)
+
+        let hmac = DataCrypto.computeHMAC(data: data, key: key)
+        let isValid = DataCrypto.validateHMAC(data: data, key: key, expectedHMAC: hmac)
+
+        XCTAssertTrue(isValid)
+    }
+
+    func testComputePacketHMAC() {
+        let key = SymmetricKey(data: Data(repeating: 0x00, count: 32))
+        let guid = Data(repeating: 0x01, count: 6)
+        let payload = Data(\"test\".utf8)
+
+        let hmac = DataCrypto.computePacketHMAC(guid: guid, payload: payload, key: key)
+
+        XCTAssertEqual(hmac.count, 16)
+    }
+
+    func testValidatePacketHMAC() {
+        let key = SymmetricKey(data: Data(repeating: 0x00, count: 32))
+        let guid = Data(repeating: 0x01, count: 6)
+        let payload = Data(\"test\".utf8)
+
+        let hmac = DataCrypto.computePacketHMAC(guid: guid, payload: payload, key: key)
+        let isValid = DataCrypto.validatePacketHMAC(guid: guid, payload: payload, key: key, expectedHMAC: hmac)
+
+        XCTAssertTrue(isValid)
+    }
+}"))
+    (subsection
+      (heading "3. Run Tests")
+      (code "swift test --filter DataCryptoTests")))
+  (section
+    (heading "Verification")
+    (item "[ ] HMAC computation works")
+    (item "[ ] Validation works")
+    (item "[ ] Tests pass")
+    (code "swift test --filter DataCryptoTests"))
+  (section
+    (heading "Documentation")
+    (para "**Record end time** and calculate duration (end − start timestamp).")
+    (para "Create `docs/build-history/ybs-step_d4e5f6a1b2c3-DONE.txt`:")
+    (code "STEP ybs-step_d4e5f6a1b2c3: Swift HMAC Computation
+STARTED:    [start timestamp from Before Starting]
+COMPLETED:  [ISO 8601 timestamp]
+DURATION:   [minutes]
+
+OBJECTIVES COMPLETED:
+[copy from Step Objectives above]
+
+FILES CREATED/MODIFIED:
+- Sources/YXProtocol/Primitives/DataCrypto.swift
+- Tests/YXProtocolTests/Unit/DataCryptoTests.swift
+
+VERIFICATION: PASSED (attempt [N])
+
+NEXT STEP: ybs-step_e5f6a1b2c3d4 (Packet Builder)")
+    (para "Update `BUILD_STATUS.sxp`: mark this step `[x]` and update **Last Updated** timestamp."))
+  (section
+    (heading "Success Criteria")
+    (para "This step is successful when:")
+    (item "1. All verification checks pass (within 3 attempts)")
+    (item "2. All required files exist and are valid")
+    (item "3. Build compiles/runs without errors")
+    (item "4. DONE file created in `docs/build-history/`")
+    (item "5. `BUILD_STATUS.sxp` updated"))
+  (section
+    (heading "Next Steps")
+    (para "After completing this step, proceed to:")
+    (kv "Next" "`ybs-step_e5f6a1b2c3d4` — Packet Builder"))
+  (section
+    (heading "Version History")
+    (subsection
+      (heading "0.1.0 (2026-04-11)")
+      (item "Initial step creation"))))

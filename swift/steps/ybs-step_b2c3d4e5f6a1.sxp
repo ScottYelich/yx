@@ -1,0 +1,165 @@
+(doc
+  (title "Step 2: Swift GUID Factory")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "Version" "0.1.0")
+  (section
+    (heading "Overview")
+    (para "Implement GUID Factory in Swift with wire-format compatibility with Python implementation."))
+  (section
+    (heading "What This Step Builds")
+    (para "Implements `GUIDFactory` struct — a 6-byte cryptographically-secure identifier generator using Swift's `SystemRandomNumberGenerator`, in `Sources/YXProtocol/Primitives/GUIDFactory.swift`."))
+  (section
+    (heading "Step Objectives")
+    (item "1. Implement GUID generation (6 random bytes)")
+    (item "2. Implement GUID padding")
+    (item "3. Hex conversion")
+    (item "4. XCTest unit tests")
+    (item "5. 100% coverage"))
+  (section
+    (heading "Prerequisites")
+    (item "Step 1 completed (Swift project setup)"))
+  (section
+    (heading "Traceability")
+    (kv "Implements" "protocol/specs/technical/yx-protocol-spec.sxp § Layer 2: GUID"))
+  (section
+    (heading "Instructions")
+    (subsection
+      (heading "Before Starting — Record Start Time")
+      (para "Record the current timestamp in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ` This is used for duration calculation in the DONE file."))
+    (subsection
+      (heading "1. Create GUID Factory")
+      (para "Create `Sources/YXProtocol/Primitives/GUIDFactory.swift`:")
+      (code "import Foundation
+
+public struct GUIDFactory {
+    public static func generate() -> Data {
+        var bytes = [UInt8](repeating: 0, count: 6)
+        _ = SecRandomCopyBytes(kSecRandomDefault, 6, &bytes)
+        return Data(bytes)
+    }
+
+    public static func pad(guid: Data) -> Data {
+        if guid.count == 6 {
+            return guid
+        } else if guid.count < 6 {
+            return guid + Data(repeating: 0, count: 6 - guid.count)
+        } else {
+            return guid.prefix(6)
+        }
+    }
+
+    public static func fromHex(_ hexString: String) -> Data {
+        var data = Data()
+        var hex = hexString
+        while hex.count >= 2 {
+            let index = hex.index(hex.startIndex, offsetBy: 2)
+            let byteString = String(hex[..<index])
+            if let byte = UInt8(byteString, radix: 16) {
+                data.append(byte)
+            }
+            hex = String(hex[index...])
+        }
+        return pad(guid: data)
+    }
+
+    public static func toHex(_ guid: Data) -> String {
+        return guid.map { String(format: \"%02x\", $0) }.joined()
+    }
+}"))
+    (subsection
+      (heading "2. Create Tests")
+      (para "Create `Tests/YXProtocolTests/Unit/GUIDFactoryTests.swift`:")
+      (code "import XCTest
+@testable import YXProtocol
+
+final class GUIDFactoryTests: XCTestCase {
+    func testGenerateReturns6Bytes() {
+        let guid = GUIDFactory.generate()
+        XCTAssertEqual(guid.count, 6)
+    }
+
+    func testGenerateProducesDifferentGUIDs() {
+        let guid1 = GUIDFactory.generate()
+        let guid2 = GUIDFactory.generate()
+        XCTAssertNotEqual(guid1, guid2)
+    }
+
+    func testPadGUID() {
+        let short = Data([0x01, 0x02])
+        let padded = GUIDFactory.pad(guid: short)
+        XCTAssertEqual(padded.count, 6)
+        XCTAssertEqual(padded, Data([0x01, 0x02, 0x00, 0x00, 0x00, 0x00]))
+    }
+
+    func testPadGUIDExact6Bytes() {
+        let exact = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06])
+        let padded = GUIDFactory.pad(guid: exact)
+        XCTAssertEqual(padded, exact)
+    }
+
+    func testFromHex() {
+        let guid = GUIDFactory.fromHex(\"010203040506\")
+        XCTAssertEqual(guid, Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]))
+    }
+
+    func testToHex() {
+        let guid = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06])
+        let hex = GUIDFactory.toHex(guid)
+        XCTAssertEqual(hex, \"010203040506\")
+    }
+
+    func testHexRoundtrip() {
+        let original = Data([0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff])
+        let hex = GUIDFactory.toHex(original)
+        let restored = GUIDFactory.fromHex(hex)
+        XCTAssertEqual(restored, original)
+    }
+}"))
+    (subsection
+      (heading "3. Run Tests")
+      (code "swift test --filter GUIDFactoryTests")))
+  (section
+    (heading "Verification")
+    (item "[ ] Tests pass")
+    (item "[ ] GUID generation works")
+    (item "[ ] Padding works")
+    (item "[ ] Hex conversion works")
+    (code "swift test --filter GUIDFactoryTests"))
+  (section
+    (heading "Documentation")
+    (para "**Record end time** and calculate duration (end − start timestamp).")
+    (para "Create `docs/build-history/ybs-step_b2c3d4e5f6a1-DONE.txt`:")
+    (code "STEP ybs-step_b2c3d4e5f6a1: Swift GUID Factory
+STARTED:    [start timestamp from Before Starting]
+COMPLETED:  [ISO 8601 timestamp]
+DURATION:   [minutes]
+
+OBJECTIVES COMPLETED:
+[copy from Step Objectives above]
+
+FILES CREATED/MODIFIED:
+- Sources/YXProtocol/Primitives/GUIDFactory.swift
+- Tests/YXProtocolTests/Unit/GUIDFactoryTests.swift
+
+VERIFICATION: PASSED (attempt [N])
+
+NEXT STEP: ybs-step_c3d4e5f6a1b2 (Packet Structure)")
+    (para "Update `BUILD_STATUS.sxp`: mark this step `[x]` and update **Last Updated** timestamp."))
+  (section
+    (heading "Success Criteria")
+    (para "This step is successful when:")
+    (item "1. All verification checks pass (within 3 attempts)")
+    (item "2. All required files exist and are valid")
+    (item "3. Build compiles/runs without errors")
+    (item "4. DONE file created in `docs/build-history/`")
+    (item "5. `BUILD_STATUS.sxp` updated"))
+  (section
+    (heading "Next Steps")
+    (para "After completing this step, proceed to:")
+    (kv "Next" "`ybs-step_c3d4e5f6a1b2` — Packet Structure"))
+  (section
+    (heading "Version History")
+    (subsection
+      (heading "0.1.0 (2026-04-11)")
+      (item "Initial step creation"))))

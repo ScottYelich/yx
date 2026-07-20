@@ -1,0 +1,242 @@
+(doc
+  (title "YX Networking Framework - Python Implementation")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "**Status:** ⚡ Production-Ready Port **Version:** 1.0.0 **Python:** 3.10+")
+  (section
+    (heading "Overview")
+    (para "A production-grade Python networking framework ported from the Swift YX implementation, featuring:")
+    (item "**Modern Async I/O:** 100% asyncio-based architecture")
+    (item "**Type Safety:** Python 3.10+ type hints throughout")
+    (item "**Security:** HMAC-SHA256 + AES-GCM encryption + rate limiting")
+    (item "**Reliability:** Graceful shutdown, memory leak prevention")
+    (item "**Configuration:** Fully externalized settings")
+    (item "**Protocol Parity:** 100% compatible with Swift version"))
+  (section
+    (heading "Quick Start")
+    (subsection
+      (heading "Installation")
+      (code "# Install dependencies
+pip install -r requirements.txt
+
+# Or install as package
+pip install -e ."))
+    (subsection
+      (heading "Usage")
+      (code "import asyncio
+from yx.primitives.guid import GUIDFactory
+from yx.primitives.data_crypto import generate_key
+from yx.application.yx_coordinator import YXCoordinator
+from yx.application.configuration import YXConfiguration
+
+async def main():
+    # Generate GUID and key
+    guid = GUIDFactory.generate()
+    key = generate_key()
+
+    # Create configuration
+    config = YXConfiguration.default()
+    config.network.udp_port = 8888
+
+    # Initialize coordinator
+    coordinator = YXCoordinator(guid, key, config)
+
+    # Start
+    await coordinator.start()
+
+    # Send a message
+    await coordinator.send_hello(\"Python\", \"192.168.1.100\", 8888)
+
+    # Run for a while
+    await asyncio.sleep(10)
+
+    # Clean shutdown
+    await coordinator.stop()
+
+asyncio.run(main())")))
+  (section
+    (heading "CLI Usage")
+    (para "The yxCLI provides command-line access to YX functionality:")
+    (code "# Basic usage - listen on default port 9999
+python -m yxCLI
+
+# Specify port
+python -m yxCLI --port 9998
+
+# Send to peers
+python -m yxCLI --port 9998 --peers localhost:9999
+
+# Test binary protocol with compression and encryption
+python -m yxCLI --port 9998 --peers localhost:9999 --proto-opts 0x03
+
+# Auto-shutdown after 10 seconds
+python -m yxCLI --port 9998 --peers localhost:9999 --shutdown-after 10")
+    (subsection
+      (heading "CLI Arguments")
+      (item "`--port <number>` - UDP listen port (default: 9999)")
+      (item "`--peers <host:port,...>` - Comma-separated list of peers to send packets to")
+      (item "`--proto-opts <0x00-0x03>` - Binary protocol options:")
+      (item "`0x00` = Plaintext, Uncompressed")
+      (item "`0x01` = Plaintext, Compressed")
+      (item "`0x02` = Encrypted, Uncompressed")
+      (item "`0x03` = Encrypted, Compressed")
+      (item "`--shutdown-after <seconds>` - Auto-shutdown after N seconds")))
+  (section
+    (heading "Architecture")
+    (code "yx (Package)
+  ├─ primitives/     - Foundation (GUID, crypto, compression, chunking)
+  ├─ transport/      - Networking (UDP, packets, protocols, security)
+  ├─ rpc/            - JSON-RPC 2.0 dispatcher
+  └─ application/    - YXCoordinator, configuration")
+    (subsection
+      (heading "Key Components")
+      (item "**YXCoordinator:** Main entry point, orchestrates all subsystems")
+      (item "**UDPTransport:** Async UDP with packet parsing and security")
+      (item "**ProtocolRouter:** Routes packets by protocol ID")
+      (item "**BinaryProtocol:** Protocol 1 with chunking/compression/encryption")
+      (item "**TextProtocol:** Protocol 0 for JSON-RPC messages")
+      (item "**RateLimiter:** Sliding window DoS protection")
+      (item "**KeyStore:** Per-peer symmetric key management")))
+  (section
+    (heading "Features")
+    (subsection
+      (heading "Protocols")
+      (para "✅ Protocol 0: Text/JSON-RPC messages ✅ Protocol 1: Binary/chunked with 4 modes (plaintext/encrypted × uncompressed/compressed) ✅ JSON-RPC 2.0 compliant dispatch ✅ Automatic message reassembly"))
+    (subsection
+      (heading "Security")
+      (para "✅ HMAC-SHA256 packet integrity (16-byte truncated) ✅ AES-GCM encryption ✅ Per-peer key management ✅ Rate limiting (default: 100 req/min per peer) ✅ Protocol ID validation"))
+    (subsection
+      (heading "Reliability")
+      (para "✅ Graceful shutdown ✅ Memory leak prevention (60s buffer timeout) ✅ Asyncio-based concurrency ✅ Comprehensive error handling")))
+  (section
+    (heading "Configuration")
+    (subsection
+      (heading "Default Settings")
+      (code "config = YXConfiguration.default()
+# Network: UDP 9999, 4096 buffer, process own packets
+# Protocol: 1024 chunk, 60s timeout
+# Security: HMAC on, encryption on, 100 req/min"))
+    (subsection
+      (heading "Custom Settings")
+      (code "config = YXConfiguration()
+
+# Adjust network
+config.network.udp_port = 7777
+config.network.max_packet_size = 8192
+
+# Adjust security
+config.security.max_requests_per_window = 50
+config.security.rate_limit_window = 30.0
+
+# Adjust protocol
+config.protocol.chunk_size = 2048
+config.protocol.buffer_timeout = 120.0")))
+  (section
+    (heading "Testing")
+    (subsection
+      (heading "Unit Tests")
+      (code "pytest tests/ -v"))
+    (subsection
+      (heading "P2P Testing")
+      (para "Run multiple instances for P2P mesh testing:")
+      (para "**Terminal 1 (Hub on 9999):**")
+      (code "python -m yxCLI --port 9999")
+      (para "**Terminal 2 (Sender on 9998):**")
+      (code "python -m yxCLI --port 9998 --peers localhost:9999 --shutdown-after 10")
+      (para "**Terminal 3 (Binary protocol test with compression+encryption):**")
+      (code "python -m yxCLI --port 9997 --peers localhost:9999 --proto-opts 0x03 --shutdown-after 10")))
+  (section
+    (heading "Protocol Specification")
+    (subsection
+      (heading "UDP Packet Format")
+      (code "┌────────────────┬──────────────┬──────────────────────────────────┐
+│  HMAC (16B)    │  GUID (6B)   │  Payload (variable)              │
+└────────────────┴──────────────┴──────────────────────────────────┘
+   0          16  17         22  23                              ...")
+      (para "**Minimum packet size:** 22 bytes"))
+    (subsection
+      (heading "Protocol Detection")
+      (item "**First payload byte < 32 (0x00-0x1F):** Binary protocol")
+      (item "**First payload byte ≥ 32 (0x20+):** Text protocol (JSON)"))
+    (subsection
+      (heading "Binary Protocol (Protocol 1)")
+      (para "**Header Format:**")
+      (code "[protoID(1)] + [protoOpts(1)] + [msgID(8)] + [chunkIndex(4)] + [totalChunks(4)] + [data]")
+      (para "**protoOpts flags:**")
+      (item "Bit 0 (0x01): Compression enabled")
+      (item "Bit 1 (0x02): Encryption enabled")))
+  (section
+    (heading "File Structure")
+    (code "src/python/
+├── yx/
+│   ├── primitives/
+│   │   ├── guid.py                  # 6-byte GUID generation
+│   │   ├── data_crypto.py           # HMAC, AES-GCM
+│   │   ├── data_compression.py      # zlib compression
+│   │   ├── data_chunking.py         # Chunk/unchunk data
+│   │   ├── data_hex.py              # Hex utilities
+│   │   ├── json_utils.py            # JSON helpers
+│   │   ├── logger.py                # Emoji-based logging
+│   │   └── operation_result.py      # Result type
+│   ├── transport/
+│   │   ├── packet.py                # Packet data structure
+│   │   ├── packet_builder.py        # Build/parse packets
+│   │   ├── protocol_router.py       # Route by protocol ID
+│   │   ├── text_protocol.py         # Protocol 0 handler
+│   │   ├── binary_protocol.py       # Protocol 1 handler
+│   │   ├── udp_transport.py         # Async UDP transport
+│   │   ├── rate_limiter.py          # Rate limiting
+│   │   └── key_store.py             # Key management
+│   ├── rpc/
+│   │   └── dispatcher.py            # JSON-RPC 2.0
+│   └── application/
+│       ├── configuration.py         # YXConfiguration
+│       └── yx_coordinator.py        # Main coordinator
+├── yxCLI/
+│   ├── __init__.py
+│   └── __main__.py                  # CLI entry point
+├── tests/
+│   ├── test_primitives/
+│   ├── test_transport/
+│   └── test_integration/
+├── requirements.txt
+├── pyproject.toml
+└── README.sxp"))
+  (section
+    (heading "Dependencies")
+    (item "**cryptography** (>=41.0.0) - HMAC, AES-GCM, key generation")
+    (item "**pytest** (>=7.4.0) - Testing framework")
+    (item "**pytest-asyncio** (>=0.21.0) - Async test support"))
+  (section
+    (heading "Differences from Swift Version")
+    (item "1. **Async Model:** Uses asyncio instead of Swift actors")
+    (item "2. **Type System:** Python type hints instead of Swift's strong typing")
+    (item "3. **Error Handling:** Mix of exceptions and Result pattern")
+    (item "4. **Logging:** Similar emoji-based logging to Swift"))
+  (section
+    (heading "Development")
+    (subsection
+      (heading "Install for Development")
+      (code "pip install -e \".[dev]\""))
+    (subsection
+      (heading "Run Tests")
+      (code "pytest tests/ -v --cov=yx"))
+    (subsection
+      (heading "Type Checking")
+      (code "mypy yx/")))
+  (section
+    (heading "Compatibility")
+    (para "This Python implementation is **100% wire-compatible** with the Swift YX version:")
+    (item "Same packet format (HMAC + GUID + Payload)")
+    (item "Same protocol IDs (0 = text, 1 = binary)")
+    (item "Same protoOpts flags (0x00-0x03)")
+    (item "Same HMAC computation (truncated SHA256)")
+    (item "Same encryption (AES-GCM)")
+    (item "Same compression (zlib)")
+    (para "Python and Swift instances can communicate seamlessly in a P2P mesh network."))
+  (section
+    (heading "License")
+    (para "MIT"))
+  (section
+    (heading "Credits")
+    (para "Ported from the Swift YX Networking Framework v1.0.0 Original author: YX Framework Team Python port: 2025")))

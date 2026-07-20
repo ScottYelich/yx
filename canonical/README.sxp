@@ -1,0 +1,111 @@
+(doc
+  (title "Canonical Artifacts")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "This directory contains language-agnostic reference artifacts that all YX implementations must validate against.")
+  (section
+    (heading "Purpose")
+    (para "Canonical artifacts ensure wire format compatibility across all language implementations. When multiple implementations exist (Python, Swift, Rust, etc.), they must all produce and consume identical packets."))
+  (section
+    (heading "Directory Structure")
+    (subsection
+      (heading "test-vectors/")
+      (para "**Purpose:** JSON-formatted test cases with expected inputs and outputs")
+      (para "**Contents:**")
+      (item "`text-protocol-packets.json` - Text protocol (Protocol 0) test cases")
+      (item "`binary-protocol-packets.json` - Binary protocol (Protocol 1) test cases")
+      (item "`hmac-test-vectors.json` - HMAC computation test cases")
+      (item "`encryption-test-vectors.json` - AES-256-GCM encryption test cases")
+      (item "`compression-test-vectors.json` - ZLIB compression test cases")
+      (para "**Format Example:**")
+      (code "{
+  \"version\": \"1.0.0\",
+  \"test_cases\": [
+    {
+      \"name\": \"Simple text protocol packet\",
+      \"guid\": \"010203040506\",
+      \"key\": \"0000000000000000000000000000000000000000000000000000000000000000\",
+      \"payload_hex\": \"007B226D6574686F64223A2274657374227D\",
+      \"expected_hmac\": \"a1b2c3d4e5f6...\",
+      \"expected_packet_hex\": \"a1b2c3d4e5f6...010203040506007B226D...\"
+    }
+  ]
+}"))
+    (subsection
+      (heading "reference-packets/")
+      (para "**Purpose:** Binary packet files for byte-level validation")
+      (para "**Contents:**")
+      (item "`packet-*.bin` - Raw binary packets")
+      (item "`README.txt` - Describes each packet file")
+      (para "**Usage:** Load binary file, parse as YX packet, validate structure"))
+    (subsection
+      (heading "benchmarks/")
+      (para "**Purpose:** Performance baselines for comparison")
+      (para "**Contents:**")
+      (item "`throughput-baseline.json` - Messages per second by protocol type")
+      (item "`latency-baseline.json` - Round-trip times")
+      (item "`memory-baseline.json` - Memory usage patterns")
+      (para "**Format Example:**")
+      (code "{
+  \"version\": \"1.0.0\",
+  \"implementation\": \"Python\",
+  \"timestamp\": \"2026-01-18T20:45:00Z\",
+  \"benchmarks\": {
+    \"text_protocol_throughput\": {
+      \"messages_per_second\": 10000,
+      \"avg_latency_ms\": 0.1,
+      \"p99_latency_ms\": 0.5
+    }
+  }
+}")))
+  (section
+    (heading "Workflow")
+    (subsection
+      (heading "Generating Canonical Artifacts (First Implementation)")
+      (para "Typically the **Python implementation** (reference) generates these:")
+      (item "1. Build completes Python implementation")
+      (item "2. Run canonical artifact generation step")
+      (item "3. Export test vectors, reference packets, benchmarks to `canonical/`")
+      (item "4. Commit to repository"))
+    (subsection
+      (heading "Validating Against Canonical Artifacts (Subsequent Implementations)")
+      (para "When building **Swift** (or other language):")
+      (item "1. Load test vectors from `canonical/test-vectors/`")
+      (item "2. For each test case:")
+      (item "Parse packet with Swift implementation")
+      (item "Verify HMAC matches expected")
+      (item "Verify payload matches expected")
+      (item "3. All test vectors MUST pass")
+      (item "4. Generate own benchmarks, compare to baseline")))
+  (section
+    (heading "Version Control")
+    (para "**Should canonical artifacts be committed?**")
+    (para "✅ **YES** - Commit to repository:")
+    (item "Provides known-good reference for all implementations")
+    (item "Enables offline validation")
+    (item "Documents expected behavior")
+    (para "**Update when:**")
+    (item "Protocol version changes")
+    (item "Bug fixes in reference implementation")
+    (item "Additional test coverage needed"))
+  (section
+    (heading "Validation Requirements")
+    (para "All YX implementations MUST:")
+    (item "Parse all test vectors successfully")
+    (item "Produce identical HMAC values")
+    (item "Produce identical packet bytes for same inputs")
+    (item "Pass all cryptographic test vectors")
+    (item "Meet or exceed benchmark baselines (within reason)"))
+  (section
+    (heading "Creating New Test Vectors")
+    (para "When adding test coverage:")
+    (item "1. Create test case in reference implementation")
+    (item "2. Export to appropriate JSON file in `test-vectors/`")
+    (item "3. Document the test case purpose")
+    (item "4. Update this README with new test vector file")
+    (item "5. Commit changes"))
+  (section
+    (heading "Cross-Implementation Testing")
+    (para "After canonical artifacts exist:")
+    (item "See `../tests/interop/` for cross-language validation tests")
+    (item "Interop tests use canonical artifacts as ground truth")))

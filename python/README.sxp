@@ -1,0 +1,35 @@
+(doc
+  (title "YX Protocol — Python Implementation")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "Status" "✅ Reference implementation complete (`canonical/python/`)")
+  (kv "Protocol spec" "[`../protocol/specs/`](../protocol/specs/)")
+  (section
+    (heading "What This Is")
+    (para "The Python implementation of the YX protocol. It is the **reference implementation** that generates canonical test vectors used by all other implementations."))
+  (section
+    (heading "Structure")
+    (code "python/
+├── specs/                    # Python-specific implementation specs
+│   ├── technical/
+│   │   ├── _BASE.sxp          # Python coding standards
+│   │   └── ybs-spec_3f7a9c2e1b4d.sxp  # Module design & dependency decisions
+│   └── testing/
+│       ├── _BASE.sxp          # pytest standards
+│       └── ybs-spec_8b2d5e9f1a3c.sxp  # Python testing strategy
+└── steps/                    # YBS build steps
+    ├── STEPS_ORDER.txt
+    ├── ybs-step_000000000000.sxp    # Step 0: Python build configuration
+    └── ybs-step_<guid>.md         # Steps 1-15"))
+  (section
+    (heading "Build Instructions")
+    (item "1. Start at the `yx/` project root")
+    (item "2. Execute Step 0: `python/steps/ybs-step_000000000000.sxp`")
+    (item "3. Follow the step sequence in `python/steps/STEPS_ORDER.txt`")
+    (item "4. Build output lands in `builds/<build_name>/`"))
+  (section
+    (heading "Canonical Reference")
+    (para "The completed reference implementation lives in `canonical/python/`. It was promoted from `builds/python-impl/` after passing all verification criteria."))
+  (section
+    (heading "Key Design Decisions")
+    (para "See `specs/technical/ybs-spec_3f7a9c2e1b4d.sxp` for Python-specific choices. See `../protocol/specs/architecture/ybs-decisions.sxp` for protocol-level ADRs.")))

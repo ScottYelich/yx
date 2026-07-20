@@ -1,0 +1,408 @@
+(doc
+  (title "YX Testing Strategy Specification")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "**Version:** 0.1.0 **Last Updated:** 2026-01-18")
+  (section
+    (heading "Overview")
+    (para "This document defines the testing strategy for YX protocol implementations, based on the reference implementation patterns from the AlgoTrader system."))
+  (section
+    (heading "Reference Implementation Analysis")
+    (para "The YX protocol was originally implemented and tested in the AlgoTrader system (`../sdts/scott/algotrader`). This specification is informed by that production system's testing approach.")
+    (subsection
+      (heading "Reference Implementation Languages")
+      (table
+        (row "Language" "File Count" "Purpose")
+        (row "Python" "231 files" "Core framework, services, dashboard, algorithms")
+        (row "Swift" "17 files" "High-performance services, algorithms")
+        (row "Bash" "30+ files" "Testing scripts, deployment, utilities"))
+      (para "**Key Finding:** Python is the primary implementation language (~93% of code), with Swift for performance-critical components."))
+    (subsection
+      (heading "Reference Implementation Testing")
+      (para "**Total Test Files:** ~60+ test files across Python and Swift")
+      (para "**Testing Frameworks Used:**")
+      (item "**Python:** Pytest with unittest.mock")
+      (item "**Swift:** XCTest (Apple's native framework)")
+      (item "**Integration:** Bash scripts for multi-service coordination")))
+  (section
+    (heading "Testing Requirements for YX Implementations")
+    (subsection
+      (heading "1. Supported Languages")
+      (para "YX implementations MUST support at least one of:")
+      (item "**Python** (primary, reference implementation)")
+      (item "**Swift** (performance-critical scenarios)")
+      (item "**Other languages** (Rust, Go, JavaScript, etc.) with wire-format compatibility")
+      (para "**Wire Format Compatibility:** All language implementations MUST produce identical packet structures as defined in `../technical/yx-protocol-spec.sxp`."))
+    (subsection
+      (heading "2. Required Testing Frameworks")
+      (subsection
+        (heading "Python Implementations")
+        (item "**Unit Testing:** Pytest")
+        (item "**Async Testing:** pytest-asyncio (`@pytest.mark.asyncio`)")
+        (item "**Mocking:** unittest.mock (Mock, AsyncMock, MagicMock, patch)")
+        (item "**Test Organization:** Class-based test structure"))
+      (subsection
+        (heading "Swift Implementations")
+        (item "**Unit Testing:** XCTest")
+        (item "**Assertions:** XCTAssert family"))
+      (subsection
+        (heading "Other Languages")
+        (item "Use idiomatic testing framework for the language")
+        (item "Must support async testing if language supports async/await")
+        (item "Must provide mocking capabilities for network I/O")))
+    (subsection
+      (heading "3. Test Categories")
+      (para "All YX implementations MUST include these test categories:")
+      (subsection
+        (heading "Category 1: Unit Tests (Protocol Layer)")
+        (para "**Purpose:** Test individual protocol components in isolation")
+        (para "**Required Test Coverage:**")
+        (item "Packet building and parsing")
+        (item "HMAC computation and validation")
+        (item "GUID generation and padding")
+        (item "Constant-time HMAC comparison")
+        (item "Packet serialization/deserialization")
+        (para "**Example from Reference:**")
+        (code "class TestPacketBuilder:
+    def test_build_packet(self):
+        guid = b'\\x01\\x02\\x03\\x04\\x05\\x06'
+        payload = b'test payload'
+        key = b'0' * 32
+
+        packet = PacketBuilder.build_packet(guid, payload, key)
+
+        assert len(packet.hmac) == 16
+        assert packet.guid == guid
+        assert packet.payload == payload"))
+      (subsection
+        (heading "Category 2: Unit Tests (Protocol Handlers)")
+        (para "**Purpose:** Test Text Protocol and Binary Protocol handlers")
+        (para "**Required Test Coverage:**")
+        (item "TextProtocol message encoding/decoding")
+        (item "BinaryProtocol header parsing")
+        (item "Compression (ZLIB)")
+        (item "Encryption (AES-256-GCM)")
+        (item "Chunking and reassembly")
+        (item "Deduplication logic")
+        (item "Buffer timeout handling")
+        (para "**Example Pattern:**")
+        (code "class TestBinaryProtocol:
+    @pytest.mark.asyncio
+    async def test_chunking_large_message(self):
+        protocol = BinaryProtocol(key=test_key, chunk_size=1024)
+        large_data = b'x' * 5000  # 5KB
+
+        chunks = await protocol.send(large_data, proto_opts=0x00, channel_id=1)
+
+        assert len(chunks) == 5  # 5 chunks for 5KB with 1KB chunks"))
+      (subsection
+        (heading "Category 3: Unit Tests (Security)")
+        (para "**Purpose:** Test security mechanisms")
+        (para "**Required Test Coverage:**")
+        (item "HMAC validation (valid and invalid cases)")
+        (item "HMAC truncation correctness")
+        (item "AES-GCM encryption/decryption round-trip")
+        (item "Nonce uniqueness")
+        (item "Replay protection (duplicate detection)")
+        (item "Rate limiting (enforce limits, allow under limits)")
+        (item "Key management (default key, per-peer keys)")
+        (para "**Example Pattern:**")
+        (code "class TestReplayProtection:
+    def test_replay_detection(self):
+        rp = ReplayProtection(max_age=300.0)
+        nonce = b'\\x01' * 16
+
+        # First time: should allow
+        assert rp.check_and_record(nonce) == True
+
+        # Second time: should reject (replay)
+        assert rp.check_and_record(nonce) == False"))
+      (subsection
+        (heading "Category 4: Network Tests")
+        (para "**Purpose:** Test UDP transport layer")
+        (para "**Required Test Coverage:**")
+        (item "UDP socket creation and binding")
+        (item "SO_REUSEADDR, SO_REUSEPORT, SO_BROADCAST flags")
+        (item "Broadcast packet transmission to 255.255.255.255")
+        (item "Packet reception from broadcast")
+        (item "Self-packet filtering (ignore own GUID)")
+        (item "Multiple listeners on same port (SO_REUSEPORT behavior)")
+        (para "**Example from Reference:**")
+        (code "@pytest.mark.asyncio
+async def test_udp_broadcast_reception():
+    transport = UDPTransport(guid=test_guid, key_store=key_store, port=50001)
+    received = []
+
+    async def on_packet(guid, payload, addr):
+        received.append((guid, payload))
+
+    await transport.start(on_packet)
+    # Send test packet
+    await transport.send(b'test', '255.255.255.255', 50001)
+    await asyncio.sleep(0.1)
+
+    assert len(received) == 1"))
+      (subsection
+        (heading "Category 5: Integration Tests")
+        (para "**Purpose:** Test protocol routing and end-to-end message flow")
+        (para "**Required Test Coverage:**")
+        (item "Protocol routing (detect Text vs Binary by first byte)")
+        (item "Complete send path: build → HMAC → send")
+        (item "Complete receive path: receive → validate HMAC → route → parse")
+        (item "Text Protocol end-to-end (JSON message)")
+        (item "Binary Protocol end-to-end (compressed message)")
+        (item "Binary Protocol end-to-end (encrypted message)")
+        (item "Binary Protocol end-to-end (compressed + encrypted)")
+        (item "Multi-chunk message reassembly")
+        (para "**Example Pattern:**")
+        (code "@pytest.mark.asyncio
+async def test_text_protocol_end_to_end():
+    # Setup sender and receiver
+    sender = YXCoordinator(guid=sender_guid, key=key)
+    receiver = YXCoordinator(guid=receiver_guid, key=key)
+
+    received_messages = []
+
+    async def on_message(message):
+        received_messages.append(message)
+
+    receiver.text_protocol.on_message = on_message
+
+    # Send message
+    test_message = {\"method\": \"test\", \"params\": {}}
+    await sender.sendText(test_message, \"255.255.255.255\", 50000)
+
+    await asyncio.sleep(0.1)
+
+    assert len(received_messages) == 1
+    assert received_messages[0][\"method\"] == \"test\""))
+      (subsection
+        (heading "Category 6: Interoperability Tests ⚠️ MANDATORY")
+        (para "**Status:** ✅ **MANDATORY** - CANNOT BE SKIPPED **Specification:** See `interoperability-requirements.sxp` for complete details")
+        (para "**Purpose:** Prove actual UDP network communication works between all language implementations")
+        (para "**CRITICAL REQUIREMENT:** Wire format compatibility is NOT sufficient. All implementations MUST demonstrate actual UDP packet exchange over the network.")
+        (para "**Required Test Matrix:** For N language implementations, N² tests are required:")
+        (item "Python → Python ✅ MANDATORY")
+        (item "Python → Swift ✅ MANDATORY")
+        (item "Swift → Python ✅ MANDATORY")
+        (item "Swift → Swift ✅ MANDATORY")
+        (para "**Required Test Scenarios (per combination):**")
+        (item "1. Simple payload (ASCII text)")
+        (item "2. Empty payload (zero bytes)")
+        (item "3. Large payload (≥5KB)")
+        (item "4. Multiple packets (≥10 sequential)")
+        (item "5. Invalid key rejection")
+        (para "**Total Tests Required:**")
+        (code "For Python + Swift: 2² × 5 = 20 tests
+All 20 tests MUST pass - no exceptions")
+        (para "**Anti-Patterns (DO NOT DO):**")
+        (item "❌ In-memory byte comparison (not real network)")
+        (item "❌ Mock sockets (not real UDP)")
+        (item "❌ Assuming wire format = network compatibility")
+        (item "❌ Skipping any combination")
+        (para "**Required Pattern:**")
+        (code "# CORRECT - Real UDP communication
+def test_python_to_swift():
+    receiver = start_swift_receiver(port=7777)
+    time.sleep(1)
+    python_sender.send_udp(payload=b\"test\", host=\"127.0.0.1\", port=7777)
+    received = receiver.wait_for_packet(timeout=5)
+    assert received.payload == b\"test\"")
+        (para "**Success Criteria:**")
+        (item "✅ All N² × 5 tests pass")
+        (item "✅ Real UDP sockets used")
+        (item "✅ Actual network communication verified")
+        (item "✅ HMAC validation passed")
+        (item "✅ Payload matches expected")
+        (para "**Failure Policy:** If ANY interop test fails:")
+        (item "❌ Implementation is NOT complete")
+        (item "❌ Cannot promote to canonical/")
+        (item "❌ Cannot claim \"production ready\"")
+        (para "**See Also:** `specs/testing/interoperability-requirements.sxp` for complete specification"))
+      (subsection
+        (heading "Category 7: Performance/Stress Tests (Optional but Recommended)")
+        (para "**Purpose:** Validate performance characteristics")
+        (para "**Recommended Coverage:**")
+        (item "Throughput: Messages per second")
+        (item "Latency: Round-trip time")
+        (item "Memory: Buffer growth under high load")
+        (item "Packet loss handling")
+        (item "Large message handling (10MB+)")
+        (item "Many concurrent channels (1000+)"))))
+  (section
+    (heading "Test Organization")
+    (subsection
+      (heading "Directory Structure")
+      (code "<implementation-root>/
+├── src/                          # Source code
+│   ├── transport/
+│   ├── primitives/
+│   └── ...
+└── tests/                        # All tests
+    ├── unit/                     # Unit tests
+    │   ├── test_packet_builder.py
+    │   ├── test_text_protocol.py
+    │   ├── test_binary_protocol.py
+    │   ├── test_hmac.py
+    │   ├── test_encryption.py
+    │   └── test_compression.py
+    ├── network/                  # Network layer tests
+    │   ├── test_udp_transport.py
+    │   ├── test_broadcast.py
+    │   └── test_reuseport.py
+    ├── integration/              # Integration tests
+    │   ├── test_end_to_end.py
+    │   ├── test_protocol_routing.py
+    │   └── test_chunking.py
+    ├── interop/                  # Cross-language tests
+    │   ├── test_python_swift.sh
+    │   └── receiver.swift
+    └── performance/              # Performance tests (optional)
+        ├── test_throughput.py
+        └── test_latency.py"))
+    (subsection
+      (heading "Test File Naming")
+      (item "**Python:** `test_*.py` or `*_test.py`")
+      (item "**Swift:** `*Tests.swift`")
+      (item "**Shell:** `test_*.sh` or `*_test.sh`"))
+    (subsection
+      (heading "Test Class/Function Naming")
+      (item "**Python Classes:** `Test<ComponentName>` (e.g., `TestPacketBuilder`)")
+      (item "**Python Methods:** `test_<specific_behavior>` (e.g., `test_hmac_validation_rejects_invalid`)")
+      (item "**Swift Classes:** `<ComponentName>Tests` (e.g., `PacketBuilderTests`)")
+      (item "**Swift Methods:** `test<SpecificBehavior>` (e.g., `testHMACValidationRejectsInvalid`)")))
+  (section
+    (heading "Testing Patterns")
+    (subsection
+      (heading "Pattern 1: Arrange-Act-Assert (AAA)")
+      (para "All tests SHOULD follow the AAA pattern:")
+      (code "def test_something(self):
+    # Arrange: Set up test data
+    packet = create_test_packet()
+
+    # Act: Execute the behavior
+    result = validate_packet(packet)
+
+    # Assert: Verify the result
+    assert result == expected_value"))
+    (subsection
+      (heading "Pattern 2: Fixtures for Common Setup")
+      (para "Use testing framework fixtures to avoid duplication:")
+      (code "@pytest.fixture
+def test_key():
+    return b'0' * 32
+
+@pytest.fixture
+def test_guid():
+    return b'\\x01\\x02\\x03\\x04\\x05\\x06'
+
+def test_build_packet(test_key, test_guid):
+    packet = PacketBuilder.build_packet(test_guid, b'payload', test_key)
+    assert packet.guid == test_guid"))
+    (subsection
+      (heading "Pattern 3: Mocking for Network I/O")
+      (para "Use mocks to avoid actual network operations in unit tests:")
+      (code "@pytest.mark.asyncio
+async def test_send_without_network(mocker):
+    mock_socket = mocker.Mock()
+    transport = UDPTransport(...)
+    transport._socket = mock_socket
+
+    await transport.send(b'test', '255.255.255.255', 50000)
+
+    mock_socket.sendto.assert_called_once()"))
+    (subsection
+      (heading "Pattern 4: Async Test Support")
+      (para "For async code, use appropriate async test decorators:")
+      (code "# Python with pytest
+@pytest.mark.asyncio
+async def test_async_operation():
+    result = await async_function()
+    assert result == expected
+
+# Swift with XCTest
+func testAsyncOperation() async throws {
+    let result = await asyncFunction()
+    XCTAssertEqual(result, expected)
+}")))
+  (section
+    (heading "Test Coverage Requirements")
+    (subsection
+      (heading "Minimum Coverage Thresholds")
+      (item "**Line Coverage:** ≥80%")
+      (item "**Branch Coverage:** ≥70%")
+      (item "**Critical Paths:** 100% (HMAC validation, encryption, packet parsing)"))
+    (subsection
+      (heading "Coverage Tools")
+      (item "**Python:** pytest-cov")
+      (item "**Swift:** Xcode Code Coverage")
+      (item "**Other:** Language-appropriate coverage tools"))
+    (subsection
+      (heading "Running Coverage")
+      (code "# Python
+pytest --cov=src --cov-report=html tests/
+
+# Swift
+swift test --enable-code-coverage")))
+  (section
+    (heading "Verification Criteria")
+    (para "A YX implementation's test suite is **COMPLETE** when:")
+    (item "1. ✅ All 7 test categories have test files")
+    (item "2. ✅ All required test coverage items are tested")
+    (item "3. ✅ Line coverage ≥80%")
+    (item "4. ✅ All tests pass consistently")
+    (item "5. ✅ No flaky tests (pass rate ≥99% over 100 runs)")
+    (item "6. ✅ Tests run in <60 seconds total (excluding performance tests)")
+    (item "7. ✅ Cross-language interop tests pass (if multiple implementations)"))
+  (section
+    (heading "Continuous Integration")
+    (subsection
+      (heading "CI/CD Requirements")
+      (para "All implementations SHOULD include:")
+      (item "Automated test execution on every commit")
+      (item "Coverage reporting")
+      (item "Test result badges in README")
+      (item "Failure notifications"))
+    (subsection
+      (heading "Example GitHub Actions Workflow")
+      (code "name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install pytest pytest-cov pytest-asyncio
+      - name: Run tests
+        run: pytest --cov=src --cov-report=xml tests/
+      - name: Upload coverage
+        uses: codecov/codecov-action@v2")))
+  (section
+    (heading "Reference Implementation Testing Stats")
+    (para "From the AlgoTrader YX implementation:")
+    (item "**Total Test Files:** ~60+")
+    (item "**Python Test Files:** ~45+")
+    (item "**Swift Test Files:** 2")
+    (item "**Shell Test Scripts:** 30+")
+    (item "**Test Organization:** By component (dashboard, models, core) + integration/debug")
+    (item "**Frameworks:** Pytest + XCTest + Bash")
+    (item "**Async Support:** Yes (pytest-asyncio)")
+    (item "**Mocking:** Yes (unittest.mock)")
+    (item "**Cross-language Tests:** Yes (Python ↔ Swift interop)")
+    (para "**Key Pattern:** Heavy emphasis on network/debug tests for YX layer validation (HMAC, JSON parsing, UDP broadcast, socket reuse)."))
+  (section
+    (heading "Summary")
+    (para "This testing strategy ensures YX implementations are:")
+    (item "**Correct:** Comprehensive unit tests for all components")
+    (item "**Secure:** Explicit tests for all security mechanisms")
+    (item "**Reliable:** Integration tests for end-to-end flows")
+    (item "**Compatible:** Interop tests for cross-language implementations")
+    (item "**Performant:** Optional performance tests for production readiness")
+    (para "Implementations following this specification will have production-grade test coverage comparable to the reference AlgoTrader system.")))

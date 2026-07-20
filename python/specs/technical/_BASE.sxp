@@ -1,0 +1,41 @@
+(doc
+  (title "Technical Specifications — Python System-Wide Defaults")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "System" "YX Python Implementation")
+  (kv "Category" "Technical")
+  (kv "Type" "BASE")
+  (kv "Version" "0.1.0")
+  (kv "Last Updated" "2026-04-11")
+  (section
+    (heading "Language Version")
+    (kv "Minimum" "Python 3.10")
+    (kv "Recommended" "Python 3.11+")
+    (item "Reason: `match` statements (3.10), improved `asyncio` exception groups (3.11)"))
+  (section
+    (heading "Package Management")
+    (kv "Tool" "`pyproject.toml` + `pip` (PEP 517/518 build system)")
+    (kv "Test extras" "`pip install -e .[dev]`")
+    (item "No `requirements.txt` — all dependencies declared in `pyproject.toml`"))
+  (section
+    (heading "Coding Standards")
+    (item "Type annotations required on all public functions and class attributes")
+    (item "`dataclass` preferred over plain classes for data structures")
+    (item "f-strings for string formatting (not `.format()` or `%`)")
+    (item "Constants in `UPPER_SNAKE_CASE`"))
+  (section
+    (heading "Async Model")
+    (item "`asyncio` for all async I/O (UDP socket operations)")
+    (item "`async def` / `await` style (not callbacks)")
+    (item "Event loop management is the caller's responsibility"))
+  (section
+    (heading "Module Structure Convention")
+    (code "src/yx/
+├── primitives/    # Pure computation: GUID generation, HMAC, crypto
+└── transport/     # I/O and packet handling: Packet, PacketBuilder, UDPSocket")
+    (para "`primitives/` has no I/O dependencies. `transport/` may depend on `primitives/` but not vice versa."))
+  (section
+    (heading "Error Handling")
+    (item "Raise `ValueError` for invalid inputs (bad key length, empty GUID, etc.)")
+    (item "Raise `RuntimeError` for I/O failures (socket bind errors, etc.)")
+    (item "Never silently swallow errors in protocol-critical paths")))

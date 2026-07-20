@@ -1,0 +1,42 @@
+(doc
+  (title "Testing Specifications — System-Wide Defaults")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "System" "YX Protocol")
+  (kv "Category" "Testing")
+  (kv "Type" "BASE (applies to all testing specs in this category)")
+  (kv "Version" "0.1.0")
+  (kv "Last Updated" "2026-04-11")
+  (section
+    (heading "Coverage Requirements")
+    (para "These minimums apply to all YX implementations regardless of language.")
+    (table
+      (row "Path" "Minimum" "Target")
+      (row "Overall line coverage" "80%" "90%")
+      (row "HMAC computation" "100%" "100%")
+      (row "Packet serialization/deserialization" "100%" "100%")
+      (row "Security layer (replay, rate limit)" "100%" "100%")
+      (row "UDP transport" "80%" "90%")))
+  (section
+    (heading "Wire Format Validation")
+    (para "Every implementation must validate against the canonical test vectors in `canonical/test-vectors/` before being considered complete.")
+    (item "All canonical test vectors MUST pass (zero failures allowed)")
+    (item "HMAC values must match byte-for-byte")
+    (item "Serialized packet bytes must match byte-for-byte"))
+  (section
+    (heading "Interoperability Testing")
+    (para "After both Python and Swift implementations exist, the 48-test interop matrix is **mandatory**. A build is not complete without passing all 48 tests.")
+    (para "See `interoperability-requirements.sxp` for the full test matrix."))
+  (section
+    (heading "Test Quality Standards")
+    (item "No flaky tests (≥99% pass rate over repeated runs)")
+    (item "Tests must use real UDP sockets (no mock sockets for interop tests)")
+    (item "Unit tests may mock I/O but must test actual cryptographic computations")
+    (item "Timing-sensitive tests (replay window, rate limiting) must use deterministic clocks"))
+  (section
+    (heading "Test Naming Conventions")
+    (code "test_<component>_<scenario>_<expected_outcome>")
+    (para "Examples:")
+    (item "`test_hmac_valid_key_returns_16_bytes`")
+    (item "`test_packet_tampered_hmac_raises_error`")
+    (item "`test_replay_duplicate_packet_rejected`")))

@@ -1,0 +1,52 @@
+(doc
+  (title "YX Builds")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "This directory contains build workspaces for different YX implementations.")
+  (section
+    (heading "Build Workspaces")
+    (para "Each build workspace is a complete implementation of YX in a specific language or configuration.")
+    (subsection
+      (heading "Primary Implementations")
+      (item "`python-impl/` - Python implementation (reference, generates canonical artifacts)")
+      (item "`swift-impl/` - Swift implementation (validates against canonical artifacts)"))
+    (subsection
+      (heading "Future Implementations")
+      (item "`rust-impl/` - Rust implementation (planned)")
+      (item "`go-impl/` - Go implementation (planned)")))
+  (section
+    (heading "Build Structure")
+    (para "Each build directory contains:")
+    (code "build-name/
+├── BUILD_CONFIG.json    # Configuration from Step 0
+├── BUILD_STATUS.sxp      # Progress tracking
+├── SESSION.md           # Crash recovery (during build)
+├── [source code]        # Implementation files
+├── [tests]              # Test files
+└── docs/
+    └── build-history/   # Completed step records"))
+  (section
+    (heading "Creating a New Build")
+    (item "1. Create a new directory: `mkdir builds/<build-name>`")
+    (item "2. Navigate to build directory: `cd builds/<build-name>`")
+    (item "3. Point AI agent at system root with build name")
+    (item "4. AI executes Step 0 to create BUILD_CONFIG.json")
+    (item "5. AI executes Steps 1-N autonomously"))
+  (section
+    (heading "Build Order")
+    (para "When building multiple implementations:")
+    (item "1. **Python first** (`python-impl/`)")
+    (item "Generates canonical test vectors → `../canonical/test-vectors/`")
+    (item "Generates reference packets → `../canonical/reference-packets/`")
+    (item "Generates benchmarks → `../canonical/benchmarks/`")
+    (item "2. **Swift second** (`swift-impl/`)")
+    (item "Validates against canonical test vectors")
+    (item "Ensures wire format compatibility with Python")
+    (item "Generates own benchmarks for comparison")
+    (item "3. **Interop tests** (`../tests/interop/`)")
+    (item "Run after both implementations complete")
+    (item "Verify Python ↔ Swift message exchange")
+    (item "Confirm identical packet generation"))
+  (section
+    (heading "Current Builds")
+    (para "No builds created yet. Builds will be created by executing Step 0 and following language-specific build steps.")))

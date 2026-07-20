@@ -1,0 +1,271 @@
+(doc
+  (title "Step 1: Python Project Setup")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "Version" "0.1.0")
+  (section
+    (heading "Overview")
+    (para "Set up the Python project structure with dependencies, configuration files, and basic directory organization. This creates the foundation for building the YX protocol implementation."))
+  (section
+    (heading "What This Step Builds")
+    (para "Creates the Python project foundation: `pyproject.toml` with all dependencies, `src/yx/primitives/` and `src/yx/transport/` package tree, test directories, and a working `pip install -e .[dev]` environment."))
+  (section
+    (heading "Step Objectives")
+    (item "1. Create Python project configuration (pyproject.toml)")
+    (item "2. Set up directory structure for source and tests")
+    (item "3. Configure dependencies (cryptography library for HMAC/AES)")
+    (item "4. Create initial package structure")
+    (item "5. Verify Python environment"))
+  (section
+    (heading "Prerequisites")
+    (item "Step 0 completed (BUILD_CONFIG.json exists)")
+    (item "Python {{CONFIG:python_version}} or later installed")
+    (item "pip package manager available"))
+  (section
+    (heading "Traceability")
+    (kv "Implements" "protocol/specs/architecture/implementation-languages.sxp § Python Considerations")
+    (kv "References" "protocol/specs/technical/yx-protocol-spec.sxp (Security requirements)"))
+  (section
+    (heading "Instructions")
+    (subsection
+      (heading "Before Starting — Record Start Time")
+      (para "Record the current timestamp in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ` This is used for duration calculation in the DONE file."))
+    (subsection
+      (heading "1. Navigate to Build Directory")
+      (code "cd builds/{{CONFIG:build_name}}"))
+    (subsection
+      (heading "2. Create pyproject.toml")
+      (para "Create `pyproject.toml`:")
+      (code "[project]
+name = \"yx-protocol\"
+version = \"0.1.0\"
+description = \"YX UDP Protocol Implementation\"
+requires-python = \">={{CONFIG:python_version}}\"
+dependencies = [
+    \"cryptography>=41.0.0\",
+]
+
+[project.optional-dependencies]
+dev = [
+    \"pytest>=7.4.0\",
+    \"pytest-asyncio>=0.21.0\",
+    \"pytest-cov>=4.1.0\",
+]
+
+[build-system]
+requires = [\"setuptools>=68.0.0\", \"wheel\"]
+build-backend = \"setuptools.build_meta\"
+
+[tool.pytest.ini_options]
+testpaths = [\"tests\"]
+python_files = [\"test_*.py\"]
+python_classes = [\"Test*\"]
+python_functions = [\"test_*\"]
+asyncio_mode = \"auto\"
+
+[tool.coverage.run]
+source = [\"src\"]
+omit = [\"tests/*\"]
+
+[tool.coverage.report]
+exclude_lines = [
+    \"pragma: no cover\",
+    \"def __repr__\",
+    \"raise AssertionError\",
+    \"raise NotImplementedError\",
+]"))
+    (subsection
+      (heading "3. Create Directory Structure")
+      (code "mkdir -p src/yx
+mkdir -p src/yx/transport
+mkdir -p src/yx/primitives
+mkdir -p tests/unit
+mkdir -p tests/integration"))
+    (subsection
+      (heading "4. Create Package __init__.py Files")
+      (para "Create `src/yx/__init__.py`:")
+      (code "\"\"\"
+YX Protocol - Secure UDP-based networking protocol.
+
+Implements: protocol/specs/technical/yx-protocol-spec.sxp
+\"\"\"
+
+__version__ = \"0.1.0\"
+__all__ = []")
+      (para "Create `src/yx/transport/__init__.py`:")
+      (code "\"\"\"
+YX Transport Layer - UDP packet handling.
+
+Implements: protocol/specs/technical/yx-protocol-spec.sxp § Transport Layer
+\"\"\"
+
+__all__ = []")
+      (para "Create `src/yx/primitives/__init__.py`:")
+      (code "\"\"\"
+YX Primitives - Core data structures and utilities.
+
+Implements: protocol/specs/technical/yx-protocol-spec.sxp § Wire Format
+\"\"\"
+
+__all__ = []")
+      (para "Create `tests/__init__.py`:")
+      (code "\"\"\"YX Protocol Tests\"\"\"")
+      (para "Create `tests/unit/__init__.py`:")
+      (code "\"\"\"YX Unit Tests\"\"\"")
+      (para "Create `tests/integration/__init__.py`:")
+      (code "\"\"\"YX Integration Tests\"\"\""))
+    (subsection
+      (heading "5. Install Dependencies")
+      (code "pip install -e .[dev]"))
+    (subsection
+      (heading "6. Create README.sxp")
+      (para "Create `README.sxp`:")
+      (code "# YX Protocol - Python Implementation
+
+Secure, payload-agnostic UDP-based networking protocol.
+
+## Overview
+
+This is the reference Python implementation of the YX protocol as specified in:
+- `../../protocol/specs/technical/yx-protocol-spec.sxp`
+
+## Installation
+
+```bash
+pip install -e .[dev]")))
+  (section
+    (heading "Running Tests")
+    (code "pytest"))
+  (section
+    (heading "Coverage")
+    (code "pytest --cov=src --cov-report=html"))
+  (section
+    (heading "Project Structure")
+    (code "src/yx/              # Source code
+  transport/         # UDP transport layer
+  primitives/        # Core data structures
+tests/               # Test suite
+  unit/              # Unit tests
+  integration/       # Integration tests"))
+  (section
+    (heading "Specifications")
+    (para "Built following YBS (Yelich Build System) methodology.")
+    (para "See `../../protocol/specs/` for complete specifications.")
+    (code "
+### 7. Create .gitignore (in build directory)
+
+Create `.gitignore`:
+"))
+  (section
+    (heading "Python")
+    (para "__pycache__/ *.py[cod] *$py.class *.so .Python *.egg-info/ dist/ build/"))
+  (section
+    (heading "Testing")
+    (para ".pytest_cache/ .coverage htmlcov/ .tox/"))
+  (section
+    (heading "Virtual environments")
+    (para "venv/ env/ ENV/"))
+  (section
+    (heading "IDE")
+    (para ".vscode/ .idea/ *.swp *.swo"))
+  (section
+    (heading "Build artifacts")
+    (para "BUILD_STATUS.sxp SESSION.md BUILD_CONFIG.json docs/build-history/")
+    (code "
+## Verification
+
+**This step is complete when:**
+
+- [ ] `pyproject.toml` exists with correct dependencies
+- [ ] Directory structure created (`src/yx/`, `src/yx/transport/`, `src/yx/primitives/`, `tests/unit/`, `tests/integration/`)
+- [ ] All `__init__.py` files created
+- [ ] Dependencies installed successfully
+- [ ] Python environment can import `yx` package
+- [ ] pytest can discover the test directory
+
+**Verification Commands:**
+
+```bash
+# Verify pyproject.toml exists
+test -f pyproject.toml && echo \"✓ pyproject.toml exists\"
+
+# Verify directory structure
+test -d src/yx/transport && \\
+test -d src/yx/primitives && \\
+test -d tests/unit && \\
+test -d tests/integration && \\
+echo \"✓ Directory structure created\"
+
+# Verify __init__.py files
+test -f src/yx/__init__.py && \\
+test -f src/yx/transport/__init__.py && \\
+test -f src/yx/primitives/__init__.py && \\
+echo \"✓ Package files created\"
+
+# Verify package imports
+python3 -c \"import yx; print(f'✓ yx package version: {yx.__version__}')\"
+
+# Verify cryptography library
+python3 -c \"from cryptography.hazmat.primitives import hashes, hmac; print('✓ cryptography library available')\"
+
+# Verify pytest works
+pytest --collect-only && echo \"✓ pytest can discover tests\"")
+    (para "**Expected Output:**")
+    (code "✓ pyproject.toml exists
+✓ Directory structure created
+✓ Package files created
+✓ yx package version: 0.1.0
+✓ cryptography library available
+✓ pytest can discover tests")
+    (para "**Retry Policy:**")
+    (item "Maximum 3 attempts")
+    (item "If pip install fails: Check internet connection, retry")
+    (item "If directory creation fails: Check permissions, retry")
+    (item "If 3 failures: STOP and report error")
+    (section
+      (heading "Notes")
+      (item "This step creates the foundation for all subsequent steps")
+      (item "cryptography library provides HMAC-SHA256 and AES-256-GCM")
+      (item "pytest-asyncio will be used for async UDP transport tests")
+      (item "Directory structure follows Python best practices")
+      (item "Each module has __init__.py for proper package imports"))
+    (section
+      (heading "Documentation")
+      (para "**Record end time** and calculate duration (end − start timestamp).")
+      (para "Create `docs/build-history/ybs-step_a1b2c3d4e5f6-DONE.txt`:")
+      (code "STEP ybs-step_a1b2c3d4e5f6: Python Project Setup
+STARTED:    [start timestamp from Before Starting]
+COMPLETED:  [ISO 8601 timestamp]
+DURATION:   [minutes]
+
+OBJECTIVES COMPLETED:
+[copy from Step Objectives above]
+
+FILES CREATED/MODIFIED:
+- pyproject.toml
+- src/yx/__init__.py
+- src/yx/primitives/__init__.py
+- src/yx/transport/__init__.py
+- tests/__init__.py
+
+VERIFICATION: PASSED (attempt [N])
+
+NEXT STEP: ybs-step_b2c3d4e5f6a1 (GUID Factory)")
+      (para "Update `BUILD_STATUS.sxp`: mark this step `[x]` and update **Last Updated** timestamp."))
+    (section
+      (heading "Success Criteria")
+      (para "This step is successful when:")
+      (item "1. All verification checks pass (within 3 attempts)")
+      (item "2. All required files exist and are valid")
+      (item "3. Build compiles/runs without errors")
+      (item "4. DONE file created in `docs/build-history/`")
+      (item "5. `BUILD_STATUS.sxp` updated"))
+    (section
+      (heading "Next Steps")
+      (para "After completing this step, proceed to:")
+      (kv "Next" "`ybs-step_b2c3d4e5f6a1` — GUID Factory"))
+    (section
+      (heading "Version History")
+      (subsection
+        (heading "0.1.0 (2026-04-11)")
+        (item "Initial step creation")))))

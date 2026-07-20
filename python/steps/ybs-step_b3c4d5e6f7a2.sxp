@@ -1,0 +1,155 @@
+(doc
+  (title "Step 8: UDP Send and Receive")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "Version" "0.1.0")
+  (section
+    (heading "Overview")
+    (para "Implement UDP send/receive with packet building and parsing integration."))
+  (section
+    (heading "What This Step Builds")
+    (para "Adds asyncio-based `send_packet()` and `receive_packet()` operations to `UDPSocket`, enabling non-blocking packet I/O with proper error handling and timeout support."))
+  (section
+    (heading "Step Objectives")
+    (item "1. Send YX packets via UDP broadcast")
+    (item "2. Receive and parse YX packets")
+    (item "3. Test send/receive with loopback")
+    (item "4. 100% coverage"))
+  (section
+    (heading "Prerequisites")
+    (item "Step 7 completed"))
+  (section
+    (heading "Traceability")
+    (kv "Implements" "protocol/specs/technical/yx-protocol-spec.sxp § UDP Transport"))
+  (section
+    (heading "Instructions")
+    (subsection
+      (heading "Before Starting — Record Start Time")
+      (para "Record the current timestamp in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ` This is used for duration calculation in the DONE file."))
+    (subsection
+      (heading "1. Add Send/Receive to UDPSocket")
+      (para "Update `src/yx/transport/udp_socket.py`:")
+      (code "# Add to existing class
+
+from .packet_builder import PacketBuilder
+
+class UDPSocket:
+    # ... existing code ...
+
+    def send_packet(self, guid: bytes, payload: bytes, key: bytes, host: str = '255.255.255.255', port: int = 50000):
+        \"\"\"Send YX packet via UDP.\"\"\"
+        if self.socket is None:
+            self.create_socket()
+
+        data = PacketBuilder.build_and_serialize(guid, payload, key)
+        self.socket.sendto(data, (host, port))
+
+    def receive_packet(self, key: bytes, buffer_size: int = 65507) -> Tuple[bytes, bytes, Tuple[str, int]]:
+        \"\"\"
+        Receive and parse YX packet.
+
+        Returns:
+            (guid, payload, addr) tuple or raises exception
+        \"\"\"
+        if self.socket is None:
+            raise RuntimeError(\"Socket not created\")
+
+        data, addr = self.socket.recvfrom(buffer_size)
+        packet = PacketBuilder.parse_and_validate(data, key)
+
+        if packet is None:
+            raise ValueError(\"Invalid packet received\")
+
+        return packet.guid, packet.payload, addr"))
+    (subsection
+      (heading "2. Create Tests")
+      (para "Create `tests/unit/test_udp_send_receive.py`:")
+      (code "\"\"\"Test UDP send/receive.\"\"\"
+
+import socket
+import pytest
+from yx.transport import UDPSocket
+
+
+class TestUDPSendReceive:
+    \"\"\"Test send/receive functionality.\"\"\"
+
+    def test_send_packet(self):
+        \"\"\"Test sending packet.\"\"\"
+        key = b'\\\\x00' * 32
+        sender = UDPSocket(port=0)  # Random port
+        sender.bind()
+
+        # Should not raise
+        sender.send_packet(b'\\\\x01'*6, b'test', key, '127.0.0.1', 50010)
+
+        sender.close()
+
+    def test_send_receive_loopback(self):
+        \"\"\"Test sending and receiving on same machine.\"\"\"
+        key = b'\\\\x00' * 32
+
+        receiver = UDPSocket(port=50011)
+        receiver.bind()
+        receiver.socket.settimeout(1.0)
+
+        sender = UDPSocket(port=0)
+        sender.bind()
+
+        # Send
+        sender.send_packet(b'\\\\x01'*6, b'test payload', key, '127.0.0.1', 50011)
+
+        # Receive
+        guid, payload, addr = receiver.receive_packet(key)
+
+        assert guid == b'\\\\x01' * 6
+        assert payload == b'test payload'
+
+        sender.close()
+        receiver.close()"))
+    (subsection
+      (heading "3. Run Tests")
+      (code "pytest tests/unit/test_udp_send_receive.py -v")))
+  (section
+    (heading "Verification")
+    (item "[ ] Can send packets")
+    (item "[ ] Can receive packets")
+    (item "[ ] Loopback test passes")
+    (code "pytest tests/unit/test_udp_send_receive.py -v"))
+  (section
+    (heading "Documentation")
+    (para "**Record end time** and calculate duration (end − start timestamp).")
+    (para "Create `docs/build-history/ybs-step_b3c4d5e6f7a2-DONE.txt`:")
+    (code "STEP ybs-step_b3c4d5e6f7a2: UDP Send and Receive
+STARTED:    [start timestamp from Before Starting]
+COMPLETED:  [ISO 8601 timestamp]
+DURATION:   [minutes]
+
+OBJECTIVES COMPLETED:
+[copy from Step Objectives above]
+
+FILES CREATED/MODIFIED:
+- src/yx/transport/udp_socket.py (extended)
+- tests/unit/test_udp_send_receive.py
+
+VERIFICATION: PASSED (attempt [N])
+
+NEXT STEP: ybs-step_c4d5e6f7a2b3 (Integration Tests)")
+    (para "Update `BUILD_STATUS.sxp`: mark this step `[x]` and update **Last Updated** timestamp."))
+  (section
+    (heading "Success Criteria")
+    (para "This step is successful when:")
+    (item "1. All verification checks pass (within 3 attempts)")
+    (item "2. All required files exist and are valid")
+    (item "3. Build compiles/runs without errors")
+    (item "4. DONE file created in `docs/build-history/`")
+    (item "5. `BUILD_STATUS.sxp` updated"))
+  (section
+    (heading "Next Steps")
+    (para "After completing this step, proceed to:")
+    (kv "Next" "`ybs-step_c4d5e6f7a2b3` — Integration Tests"))
+  (section
+    (heading "Version History")
+    (subsection
+      (heading "0.1.0 (2026-04-11)")
+      (item "Initial step creation"))))

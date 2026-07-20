@@ -1,0 +1,17 @@
+(doc
+  (title "YX Documentation")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "This directory contains additional documentation for the YX system.")
+  (section
+    (heading "Contents")
+    (item "`build-history/` - Completed build step records (created during builds)"))
+  (section
+    (heading "YBS Framework Reference Materials")
+    (para "Reference materials about the YBS framework:")
+    (item "`ybs-overview.sxp` - Brief introduction to YBS")
+    (item "`ybs-framework-spec.sxp` - Complete YBS framework documentation"))
+  (section
+    (heading "Build-Specific Documentation")
+    (para "Build-specific documentation is created in the build directories:")
+    (item "`../builds/<build-name>/docs/`")))

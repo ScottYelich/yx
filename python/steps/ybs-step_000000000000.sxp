@@ -1,0 +1,223 @@
+(doc
+  (title "Step 0: Python Build Configuration")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "Version" "0.1.0")
+  (kv "Step ID" "ybs-step_000000000000")
+  (section
+    (heading "Overview")
+    (para "Collect all configuration parameters for building the YX Python implementation and set up the build workspace. After this step, all subsequent steps run autonomously with zero user interaction."))
+  (section
+    (heading "What This Step Builds")
+    (para "A `builds/<build_name>/` workspace containing `BUILD_CONFIG.json`, `BUILD_STATUS.sxp`, and `SESSION.md`, plus the initial directory scaffolding for a Python project. This is the foundation all other steps build on top of."))
+  (section
+    (heading "Step Objectives")
+    (item "1. Check for existing `BUILD_CONFIG.json` — skip questions if found")
+    (item "2. Collect: build name, Python version, whether to generate tests")
+    (item "3. Create `builds/<build_name>/` directory tree")
+    (item "4. Write `BUILD_CONFIG.json` with all collected values")
+    (item "5. Write `BUILD_STATUS.sxp` with initial progress tracking")
+    (item "6. Write `SESSION.md` for crash recovery")
+    (item "7. Point to Step 1 (`ybs-step_a1b2c3d4e5f6`)"))
+  (section
+    (heading "Prerequisites")
+    (item "`yx/` project root exists")
+    (item "Python 3.10+ installed and on `$PATH`")
+    (item "pip available"))
+  (section
+    (heading "Configurable Values")
+    (item "`{{CONFIG:build_name|string|Build directory name|python-impl}}`")
+    (item "`{{CONFIG:enable_tests|boolean|Generate unit tests for each step|true}}`")
+    (item "`{{CONFIG:python_version|string|Minimum Python version|3.10}}`"))
+  (section
+    (heading "Traceability")
+    (para "**Implements**:")
+    (item "`python/specs/technical/ybs-spec_3f7a9c2e1b4d.sxp` FR-1 (Module Structure setup)")
+    (item "YBS methodology — Step 0: Configuration Collection")
+    (para "**References**:")
+    (item "`protocol/specs/technical/yx-protocol-spec.sxp`")
+    (item "`python/specs/testing/ybs-spec_8b2d5e9f1a3c.sxp`"))
+  (section
+    (heading "Instructions")
+    (subsection
+      (heading "Before Starting — Record Start Time")
+      (para "Record the current timestamp in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ` This is used for the DONE file duration calculation."))
+    (subsection
+      (heading "1. Check for Existing Configuration")
+      (code "test -f builds/{{CONFIG:build_name}}/BUILD_CONFIG.json && echo \"EXISTS\"")
+      (para "**If BUILD_CONFIG.json exists:**")
+      (item "Read and display the configuration")
+      (item "Skip all questions below")
+      (item "Proceed directly to Step 1 (`python/steps/ybs-step_a1b2c3d4e5f6.sxp`)")
+      (para "**If BUILD_CONFIG.json does NOT exist:** continue to step 2."))
+    (subsection
+      (heading "2. Collect Configuration Values")
+      (para "Ask the user:")
+      (para "**Question 1: Build directory name**")
+      (code "Build name (default: python-impl):
+Examples: python-impl, dev, experiment-1")
+      (para "**Question 2: Python version**")
+      (code "Minimum Python version (default: 3.10):
+Examples: 3.10, 3.11, 3.12")
+      (para "**Question 3: Generate tests**")
+      (code "Generate unit tests for each step? (true/false, default: true):"))
+    (subsection
+      (heading "3. Create Build Directory Structure")
+      (code "mkdir -p builds/{{CONFIG:build_name}}/docs/build-history
+mkdir -p builds/{{CONFIG:build_name}}/src
+mkdir -p builds/{{CONFIG:build_name}}/tests"))
+    (subsection
+      (heading "4. Create BUILD_CONFIG.json")
+      (para "Create `builds/{{CONFIG:build_name}}/BUILD_CONFIG.json`:")
+      (code "{
+  \"version\": \"1.0\",
+  \"generated\": \"<ISO 8601 timestamp>\",
+  \"system\": \"yx-python\",
+  \"ybs_version\": \"2.0.0\",
+  \"values\": {
+    \"build_name\": \"{{CONFIG:build_name}}\",
+    \"language\": \"python\",
+    \"enable_tests\": {{CONFIG:enable_tests}},
+    \"python_version\": \"{{CONFIG:python_version}}\"
+  },
+  \"metadata\": {
+    \"step_sequence\": \"python\",
+    \"config_sources\": [\"ybs-step_000000000000\"],
+    \"protocol_specs\": \"protocol/specs/\",
+    \"impl_specs\": \"python/specs/\"
+  }
+}"))
+    (subsection
+      (heading "5. Create BUILD_STATUS.sxp")
+      (para "Create `builds/{{CONFIG:build_name}}/BUILD_STATUS.sxp`:")
+      (code "# Build Status: {{CONFIG:build_name}}
+
+**System**: yx-python
+**Language**: Python {{CONFIG:python_version}}+
+**Started**: <timestamp>
+**Last Updated**: <timestamp>
+**Status**: 🔄 IN PROGRESS
+
+## Progress
+
+- [x] Step 0: Build Configuration
+- [ ] Step 1: Project Setup           (ybs-step_a1b2c3d4e5f6)
+- [ ] Step 2: GUID Factory            (ybs-step_b2c3d4e5f6a1)
+- [ ] Step 3: Packet Structure        (ybs-step_c3d4e5f6a1b2)
+- [ ] Step 4: HMAC Computation        (ybs-step_d4e5f6a1b2c3)
+- [ ] Step 5: Packet Builder          (ybs-step_e5f6a1b2c3d4)
+- [ ] Step 6: Packet Parser           (ybs-step_f6a1b2c3d4e5)
+- [ ] Step 7: UDP Socket              (ybs-step_a2b3c4d5e6f7)
+- [ ] Step 8: UDP Send/Receive        (ybs-step_b3c4d5e6f7a2)
+- [ ] Step 9: Integration Tests       (ybs-step_c4d5e6f7a2b3)
+- [ ] Step 10: Canonical Artifacts    (ybs-step_d5e6f7a2b3c4)
+- [ ] Step 11: Protocol 0 (Text)      (ybs-step_g1h2i3j4k5l6)
+- [ ] Step 12: Protocol 1 (Binary)    (ybs-step_h2i3j4k5l6m7)
+- [ ] Step 13: Security               (ybs-step_i3j4k5l6m7n8)
+- [ ] Step 14: SimplePacketBuilder    (ybs-step_j4k5l6m7n8o9)
+- [ ] Step 15: Interop Tests          (ybs-step_k5l6m7n8o9p0)
+
+## Metrics
+
+| Metric | Value |
+|---|---|
+| Steps Completed | 1 / 16 |
+| Tests Passing | 0 / 0 |
+| Code Coverage | 0% |
+| Traceability | 0% |
+
+## Issues
+
+None."))
+    (subsection
+      (heading "6. Create SESSION.md")
+      (para "Create `builds/{{CONFIG:build_name}}/SESSION.md`:")
+      (code "# Session: {{CONFIG:build_name}}
+
+**System**: yx-python
+**Build**: {{CONFIG:build_name}}
+**Started**: <timestamp>
+**Last Updated**: <timestamp>
+
+## Current Status
+
+Step 0 complete. Ready to execute Step 1 (Project Setup).
+
+## Configuration
+
+- Language: Python {{CONFIG:python_version}}+
+- Tests enabled: {{CONFIG:enable_tests}}
+- Build dir: builds/{{CONFIG:build_name}}/
+
+## Next Actions
+
+1. Execute `python/steps/ybs-step_a1b2c3d4e5f6.sxp` (Step 1: Project Setup)
+2. Follow step sequence in `python/steps/STEPS_ORDER.txt`
+3. Update BUILD_STATUS.sxp and this file after each step"))
+    (subsection
+      (heading "7. Display Summary")
+      (code "✓ Configuration complete!
+
+  System:        yx-python
+  Build name:    {{CONFIG:build_name}}
+  Build dir:     builds/{{CONFIG:build_name}}/
+  Python:        {{CONFIG:python_version}}+
+  Tests:         {{CONFIG:enable_tests}}
+
+→ Next: python/steps/ybs-step_a1b2c3d4e5f6.sxp (Step 1: Project Setup)")))
+  (section
+    (heading "Verification")
+    (para "**This step is complete when:**")
+    (item "[ ] `builds/{{CONFIG:build_name}}/BUILD_CONFIG.json` exists and is valid JSON")
+    (item "[ ] `builds/{{CONFIG:build_name}}/BUILD_STATUS.sxp` exists")
+    (item "[ ] `builds/{{CONFIG:build_name}}/SESSION.md` exists")
+    (item "[ ] `builds/{{CONFIG:build_name}}/docs/build-history/` directory exists")
+    (para "**Verification Commands:**")
+    (code "# Verify BUILD_CONFIG.json is valid JSON
+python3 -m json.tool builds/{{CONFIG:build_name}}/BUILD_CONFIG.json > /dev/null && \\
+  echo \"✓ BUILD_CONFIG.json valid\"
+
+# Verify required files
+test -f builds/{{CONFIG:build_name}}/BUILD_STATUS.sxp && echo \"✓ BUILD_STATUS.sxp exists\"
+test -f builds/{{CONFIG:build_name}}/SESSION.md && echo \"✓ SESSION.md exists\"
+test -d builds/{{CONFIG:build_name}}/docs/build-history && echo \"✓ build-history dir exists\"")
+    (para "**Expected Output:**")
+    (code "✓ BUILD_CONFIG.json valid
+✓ BUILD_STATUS.sxp exists
+✓ SESSION.md exists
+✓ build-history dir exists")
+    (para "**Retry Policy:**")
+    (item "Maximum 3 attempts")
+    (item "On failure: check write permissions, verify Python is available")
+    (item "After 3 failures: STOP and report to user"))
+  (section
+    (heading "Documentation")
+    (para "**Record end time** and calculate duration.")
+    (para "Create `builds/{{CONFIG:build_name}}/docs/build-history/ybs-step_000000000000-DONE.txt`:")
+    (code "STEP ybs-step_000000000000: Python Build Configuration
+STARTED:    [start timestamp]
+COMPLETED:  [end timestamp]
+DURATION:   [minutes]
+
+OBJECTIVES COMPLETED:
+- Configuration collected (or loaded from existing BUILD_CONFIG.json)
+- Build directory structure created
+- BUILD_CONFIG.json, BUILD_STATUS.sxp, SESSION.md written
+
+VERIFICATION: PASSED (attempt [N])
+
+NEXT STEP: ybs-step_a1b2c3d4e5f6 (Project Setup)"))
+  (section
+    (heading "Success Criteria")
+    (item "1. All verification checks pass")
+    (item "2. Agent can read BUILD_CONFIG.json values for use in Steps 1-15")
+    (item "3. DONE file created")
+    (item "4. No user interaction required for any subsequent step"))
+  (section
+    (heading "Next Steps")
+    (kv "Next" "`ybs-step_a1b2c3d4e5f6` — Project Setup"))
+  (section
+    (heading "Version History")
+    (subsection
+      (heading "0.1.0 (2026-04-11)")
+      (item "Initial creation, Python-specific Step 0 (split from shared Step 0)"))))

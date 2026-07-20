@@ -1,0 +1,182 @@
+(doc
+  (title "Step 9: Integration Tests")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (kv "Version" "0.1.0")
+  (section
+    (heading "Overview")
+    (para "Create end-to-end integration tests that verify complete YX packet workflow."))
+  (section
+    (heading "What This Step Builds")
+    (para "Builds end-to-end integration tests verifying the full packet lifecycle: `build → serialize → UDP send → UDP receive → parse → HMAC validate`. Uses real loopback UDP sockets."))
+  (section
+    (heading "Step Objectives")
+    (item "1. Test complete build → send → receive → validate flow")
+    (item "2. Test multiple packet exchanges")
+    (item "3. Test with different keys, GUIDs, payloads")
+    (item "4. Integration test coverage"))
+  (section
+    (heading "Prerequisites")
+    (item "Step 8 completed"))
+  (section
+    (heading "Traceability")
+    (kv "Implements" "protocol/specs/testing/testing-strategy.sxp § Category 5: Integration Tests"))
+  (section
+    (heading "Instructions")
+    (subsection
+      (heading "Before Starting — Record Start Time")
+      (para "Record the current timestamp in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ` This is used for duration calculation in the DONE file."))
+    (subsection
+      (heading "1. Create Integration Tests")
+      (para "Create `tests/integration/test_packet_flow.py`:")
+      (code "\"\"\"Integration tests for complete packet flow.\"\"\"
+
+import pytest
+from yx.transport import UDPSocket, PacketBuilder
+
+
+class TestPacketFlowIntegration:
+    \"\"\"Test end-to-end packet flows.\"\"\"
+
+    def test_complete_packet_flow(self):
+        \"\"\"Test build → send → receive → validate.\"\"\"
+        key = b'\\\\x00' * 32
+        guid = b'\\\\xaa' * 6
+        payload = b'integration test payload'
+
+        receiver = UDPSocket(port=50020)
+        receiver.bind()
+        receiver.socket.settimeout(2.0)
+
+        sender = UDPSocket(port=0)
+        sender.bind()
+
+        # Send
+        sender.send_packet(guid, payload, key, '127.0.0.1', 50020)
+
+        # Receive
+        recv_guid, recv_payload, addr = receiver.receive_packet(key)
+
+        assert recv_guid == guid
+        assert recv_payload == payload
+        assert '127.0.0.1' in addr[0]
+
+        sender.close()
+        receiver.close()
+
+    def test_multiple_packets(self):
+        \"\"\"Test sending/receiving multiple packets.\"\"\"
+        key = b'\\\\x00' * 32
+
+        receiver = UDPSocket(port=50021)
+        receiver.bind()
+        receiver.socket.settimeout(2.0)
+
+        sender = UDPSocket(port=0)
+        sender.bind()
+
+        # Send 3 packets
+        for i in range(3):
+            sender.send_packet(b'\\\\x01'*6, f'packet {i}'.encode(), key, '127.0.0.1', 50021)
+
+        # Receive 3 packets
+        payloads = []
+        for i in range(3):
+            _, payload, _ = receiver.receive_packet(key)
+            payloads.append(payload)
+
+        assert len(payloads) == 3
+        assert b'packet 0' in payloads
+        assert b'packet 1' in payloads
+        assert b'packet 2' in payloads
+
+        sender.close()
+        receiver.close()
+
+    def test_invalid_key_rejected(self):
+        \"\"\"Test that packets with wrong key are rejected.\"\"\"
+        send_key = b'\\\\x00' * 32
+        recv_key = b'\\\\xff' * 32
+
+        receiver = UDPSocket(port=50022)
+        receiver.bind()
+        receiver.socket.settimeout(1.0)
+
+        sender = UDPSocket(port=0)
+        sender.bind()
+
+        sender.send_packet(b'\\\\x01'*6, b'test', send_key, '127.0.0.1', 50022)
+
+        # Should raise ValueError (invalid packet)
+        with pytest.raises(ValueError, match=\"Invalid packet\"):
+            receiver.receive_packet(recv_key)
+
+        sender.close()
+        receiver.close()
+
+    def test_large_payload(self):
+        \"\"\"Test sending large payload.\"\"\"
+        key = b'\\\\x00' * 32
+        large_payload = b'X' * 10000
+
+        receiver = UDPSocket(port=50023)
+        receiver.bind()
+        receiver.socket.settimeout(2.0)
+
+        sender = UDPSocket(port=0)
+        sender.bind()
+
+        sender.send_packet(b'\\\\x01'*6, large_payload, key, '127.0.0.1', 50023)
+
+        _, payload, _ = receiver.receive_packet(key, buffer_size=65507)
+
+        assert payload == large_payload
+
+        sender.close()
+        receiver.close()"))
+    (subsection
+      (heading "2. Run Integration Tests")
+      (code "pytest tests/integration/test_packet_flow.py -v")))
+  (section
+    (heading "Verification")
+    (item "[ ] All integration tests pass")
+    (item "[ ] Complete flow works")
+    (item "[ ] Invalid keys rejected")
+    (item "[ ] Large payloads work")
+    (code "pytest tests/integration/test_packet_flow.py -v"))
+  (section
+    (heading "Documentation")
+    (para "**Record end time** and calculate duration (end − start timestamp).")
+    (para "Create `docs/build-history/ybs-step_c4d5e6f7a2b3-DONE.txt`:")
+    (code "STEP ybs-step_c4d5e6f7a2b3: Integration Tests
+STARTED:    [start timestamp from Before Starting]
+COMPLETED:  [ISO 8601 timestamp]
+DURATION:   [minutes]
+
+OBJECTIVES COMPLETED:
+[copy from Step Objectives above]
+
+FILES CREATED/MODIFIED:
+- tests/integration/test_packet_flow.py
+
+VERIFICATION: PASSED (attempt [N])
+
+NEXT STEP: ybs-step_d5e6f7a2b3c4 (Generate Canonical Artifacts)")
+    (para "Update `BUILD_STATUS.sxp`: mark this step `[x]` and update **Last Updated** timestamp."))
+  (section
+    (heading "Success Criteria")
+    (para "This step is successful when:")
+    (item "1. All verification checks pass (within 3 attempts)")
+    (item "2. All required files exist and are valid")
+    (item "3. Build compiles/runs without errors")
+    (item "4. DONE file created in `docs/build-history/`")
+    (item "5. `BUILD_STATUS.sxp` updated"))
+  (section
+    (heading "Next Steps")
+    (para "After completing this step, proceed to:")
+    (kv "Next" "`ybs-step_d5e6f7a2b3c4` — Generate Canonical Artifacts"))
+  (section
+    (heading "Version History")
+    (subsection
+      (heading "0.1.0 (2026-04-11)")
+      (item "Initial step creation"))))

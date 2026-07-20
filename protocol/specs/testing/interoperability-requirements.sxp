@@ -1,0 +1,430 @@
+(doc
+  (title "Interoperability Testing Requirements")
+  (source-format markdown)
+  (converted "2026-07-19")
+  (para "**Status:** MANDATORY **Priority:** CRITICAL **Skip Policy:** CANNOT BE SKIPPED")
+  (section
+    (heading "Overview")
+    (para "This specification defines the **mandatory interoperability testing requirements** for the YX protocol. Wire format compatibility or in-memory byte comparison is **NOT sufficient**. All language implementations **MUST** demonstrate actual UDP network communication with verified packet exchange."))
+  (section
+    (heading "Core Principle")
+    (para "**Interoperability MUST be proven with running code, not assumptions.**")
+    (item "❌ **NOT SUFFICIENT:** \"The packets are byte-identical in memory\"")
+    (item "❌ **NOT SUFFICIENT:** \"The wire format matches the spec\"")
+    (item "❌ **NOT SUFFICIENT:** \"Canonical test vectors pass\"")
+    (item "✅ **REQUIRED:** Actual UDP packets sent over network and received successfully"))
+  (section
+    (heading "Mandatory Test Matrix")
+    (para "Every language implementation MUST be tested in all 4 combinations:")
+    (table
+      (row "Test ID" "Sender" "Receiver" "Status" "Required")
+      (row "IT-01" "Python" "Python" "-" "✅ MANDATORY")
+      (row "IT-02" "Python" "Swift" "-" "✅ MANDATORY")
+      (row "IT-03" "Swift" "Python" "-" "✅ MANDATORY")
+      (row "IT-04" "Swift" "Swift" "-" "✅ MANDATORY"))
+    (para "**For N language implementations, N² tests are required.**")
+    (para "Example with 4 languages (Python, Swift, Rust, Go):")
+    (item "4 × 4 = **16 mandatory interop tests**"))
+  (section
+    (heading "Test Requirements")
+    (subsection
+      (heading "1. Network Communication Required")
+      (para "All tests MUST:")
+      (item "✅ Use real UDP sockets (not mocks, not in-memory)")
+      (item "✅ Bind to actual network ports")
+      (item "✅ Send packets over localhost (127.0.0.1)")
+      (item "✅ Use OS network stack (real UDP/IP)")
+      (item "❌ NOT use in-memory queues or mocks"))
+    (subsection
+      (heading "2. Packet Verification Required")
+      (para "All tests MUST verify:")
+      (item "✅ Packet sent successfully")
+      (item "✅ Packet received within timeout (e.g., 5 seconds)")
+      (item "✅ HMAC validates correctly")
+      (item "✅ GUID matches expected value")
+      (item "✅ Payload matches expected value")
+      (item "✅ Packet length is correct"))
+    (subsection
+      (heading "3. Test Scenarios Required")
+      (para "Each test MUST cover:")
+      (item "1. **Simple payload** - ASCII text (e.g., \"Hello from {language}!\")")
+      (item "2. **Empty payload** - Zero-byte payload")
+      (item "3. **Large payload** - At least 5KB payload")
+      (item "4. **Multiple packets** - Send/receive at least 10 packets sequentially")
+      (item "5. **Invalid key rejection** - Receiver MUST reject packet with wrong key"))
+    (subsection
+      (heading "4. Test Execution Required")
+      (para "All tests MUST:")
+      (item "✅ Run in under 30 seconds (total)")
+      (item "✅ Pass 100% of the time (no flaky tests)")
+      (item "✅ Be runnable with single command")
+      (item "✅ Report clear pass/fail status")
+      (item "✅ Log actual bytes sent/received for debugging")))
+  (section
+    (heading "Implementation Requirements")
+    (subsection
+      (heading "API Compatibility")
+      (para "To enable interop testing, all implementations MUST provide:")
+      (item "1. **Sender Interface**")
+      (item "Function/method to send packet to arbitrary host:port")
+      (item "Parameters: GUID, payload, key, destination host, destination port")
+      (item "Return: Success/failure indication")
+      (item "2. **Receiver Interface**")
+      (item "Function/method to receive packet with timeout")
+      (item "Parameters: Key, port to bind, timeout duration")
+      (item "Return: Received packet (GUID, payload) or timeout error")
+      (item "3. **Unified Key Format**")
+      (item "All implementations MUST accept keys as raw bytes OR")
+      (item "Provide conversion utilities between language-specific types"))
+    (subsection
+      (heading "Executable Requirements")
+      (para "Each implementation MUST provide:")
+      (item "1. **Standalone Sender**")
+      (item "Executable: `{language}-sender`")
+      (item "Usage: `{language}-sender <payload> <host> <port>`")
+      (item "Outputs: \"SENT: {payload}\" on success")
+      (item "Exit code: 0 on success, non-zero on failure")
+      (item "2. **Standalone Receiver**")
+      (item "Executable: `{language}-receiver`")
+      (item "Usage: `{language}-receiver <port>`")
+      (item "Outputs: \"RECEIVED: {payload}\" on success")
+      (item "Exit code: 0 on success, non-zero on failure")
+      (item "3. **Shared Configuration**")
+      (item "Use fixed test key: 32 bytes of 0x00 for interop tests")
+      (item "Use fixed test GUID: 6 bytes of 0x01 for interop tests")
+      (item "Default timeout: 5 seconds")))
+  (section
+    (heading "Test Harness Requirements")
+    (subsection
+      (heading "Orchestration")
+      (para "The test harness MUST:")
+      (item "Start receiver process in background")
+      (item "Wait for receiver to bind (e.g., 1 second)")
+      (item "Start sender process")
+      (item "Wait for completion (timeout: 5 seconds)")
+      (item "Verify both processes succeeded")
+      (item "Clean up all processes"))
+    (subsection
+      (heading "Error Reporting")
+      (para "The test harness MUST report:")
+      (item "Which test combination failed (e.g., \"Python → Swift FAILED\")")
+      (item "What went wrong (e.g., \"Receiver timeout\", \"HMAC validation failed\")")
+      (item "Actual bytes sent vs received (for debugging)")
+      (item "Network errors (e.g., \"Port already in use\")"))
+    (subsection
+      (heading "Test Isolation")
+      (para "Each test MUST:")
+      (item "Use unique port number (avoid conflicts)")
+      (item "Clean up processes after test")
+      (item "Not depend on previous test state")
+      (item "Be runnable in any order")))
+  (section
+    (heading "Success Criteria")
+    (para "Interoperability testing is **COMPLETE** when:")
+    (para "✅ All N² test combinations pass (transport layer) ✅ All N² protocol test combinations pass (text + binary) ✅ All test scenarios pass for each combination ✅ Tests run reliably (no flaky failures) ✅ Single command runs all tests ✅ Clear pass/fail reporting")
+    (para "**Completion Definition:**")
+    (code "Transport tests = N² × 5 scenarios
+Text protocol tests = N² × 3 scenarios
+Binary protocol tests = N² × 4 scenarios
+Total tests = N² × 12 scenarios
+Success = 100% pass rate")
+    (para "For Python + Swift (N=2):")
+    (code "Transport: 2² × 5 = 20 tests
+Text Protocol: 2² × 3 = 12 tests
+Binary Protocol: 2² × 4 = 16 tests
+Total tests = 48 tests
+Success = 48/48 passing"))
+  (section
+    (heading "Failure Handling")
+    (para "If ANY interop test fails:")
+    (item "1. ❌ Implementation is NOT considered complete")
+    (item "2. ❌ Cannot promote to canonical/")
+    (item "3. ❌ Cannot claim \"production ready\"")
+    (item "4. ❌ Cannot claim \"interoperable\"")
+    (para "**No exceptions. No workarounds. Must fix and pass.**"))
+  (section
+    (heading "Anti-Patterns (DO NOT DO THIS)")
+    (subsection
+      (heading "❌ Anti-Pattern 1: Mock Network")
+      (code "# WRONG - This does not prove UDP interop
+def test_interop():
+    packet = sender.build_packet()
+    result = receiver.parse_packet(packet)  # In-memory, no network
+    assert result == expected"))
+    (subsection
+      (heading "❌ Anti-Pattern 2: Assume from Wire Format")
+      (code "# WRONG - Byte-identical packets don't prove UDP works
+def test_interop():
+    python_packet = python_sender.build()
+    swift_packet = swift_sender.build()
+    assert python_packet == swift_packet  # Only proves format, not network"))
+    (subsection
+      (heading "❌ Anti-Pattern 3: Skip Combinations")
+      (code "# WRONG - Must test ALL combinations
+def test_interop():
+    test_python_to_python()  # Only 1 of 4 required tests
+    # Skipping Python→Swift, Swift→Python, Swift→Swift"))
+    (subsection
+      (heading "✅ Correct Pattern: Real Network Communication")
+      (code "# CORRECT - Actual UDP communication
+def test_interop():
+    receiver = start_receiver(port=7777)
+    time.sleep(1)  # Wait for bind
+    sender.send_udp(payload=\"test\", host=\"127.0.0.1\", port=7777)
+    received = receiver.wait_for_packet(timeout=5)
+    assert received.payload == b\"test\"")))
+  (section
+    (heading "Standalone Test Suite Requirement ⚠️ MANDATORY")
+    (subsection
+      (heading "Comprehensive Test Runner")
+      (para "A **standalone, self-contained test suite** MUST be provided that:")
+      (item "1. ✅ Runs with a single command (no setup, no configuration)")
+      (item "2. ✅ Tests ALL N² language combinations")
+      (item "3. ✅ Tests ALL 5 scenarios per combination")
+      (item "4. ✅ Tests BOTH Protocol 0 (Text) and Protocol 1 (Binary)")
+      (item "5. ✅ Reports clear pass/fail for each test")
+      (item "6. ✅ Reports overall summary")
+      (item "7. ✅ Exits with code 0 on success, non-zero on any failure")
+      (item "8. ✅ Can be run in CI/CD pipelines")
+      (item "9. ✅ Handles timeouts and cleanup automatically")
+      (item "10. ✅ Logs detailed output for debugging failures")
+      (para "**Single Command Requirement:**")
+      (code "./tests/interop/run_all_interop_tests.sh")
+      (para "**No Setup Required:**")
+      (item "Must not require manual process starting")
+      (item "Must not require configuration file editing")
+      (item "Must not require environment variables (except optional overrides)")
+      (item "Must handle port allocation automatically")
+      (item "Must clean up processes on exit (success or failure)")
+      (para "**Output Requirement:**")
+      (item "Must show progress in real-time")
+      (item "Must report each test result immediately")
+      (item "Must provide summary at end")
+      (item "Must be parseable by CI/CD tools")))
+  (section
+    (heading "Test Location")
+    (para "All interoperability tests MUST be located in:")
+    (code "tests/interop/
+├── transport/                      # UDP transport layer tests
+│   ├── test_python_to_python.py
+│   ├── test_python_to_swift.py
+│   ├── test_swift_to_python.py
+│   └── test_swift_to_swift.py
+├── protocol/                       # Protocol layer tests (NEW)
+│   ├── test_text_protocol.py      # Protocol 0 interop
+│   └── test_binary_protocol.py    # Protocol 1 interop
+├── run_all_interop_tests.sh       # Master test runner
+└── README.md                       # Test documentation")
+    (para "Single command to run all tests:")
+    (code "./tests/interop/run_all_interop_tests.sh")
+    (para "Expected output:")
+    (code "Running YX Protocol Interoperability Tests...
+
+========================================
+PART 1: TRANSPORT LAYER TESTS (UDP + HMAC)
+========================================
+
+Test 1/4: Python → Python
+  ✅ Simple payload: PASS
+  ✅ Empty payload: PASS
+  ✅ Large payload: PASS
+  ✅ Multiple packets: PASS
+  ✅ Invalid key rejection: PASS
+
+Test 2/4: Python → Swift
+  ✅ Simple payload: PASS
+  ✅ Empty payload: PASS
+  ✅ Large payload: PASS
+  ✅ Multiple packets: PASS
+  ✅ Invalid key rejection: PASS
+
+Test 3/4: Swift → Python
+  ✅ Simple payload: PASS
+  ✅ Empty payload: PASS
+  ✅ Large payload: PASS
+  ✅ Multiple packets: PASS
+  ✅ Invalid key rejection: PASS
+
+Test 4/4: Swift → Swift
+  ✅ Simple payload: PASS
+  ✅ Empty payload: PASS
+  ✅ Large payload: PASS
+  ✅ Multiple packets: PASS
+  ✅ Invalid key rejection: PASS
+
+Transport Layer: 20/20 tests passed
+
+========================================
+PART 2: PROTOCOL LAYER TESTS
+========================================
+
+Protocol 0 (Text Protocol) Tests:
+
+Test 1/4: Python → Python (Text)
+  ✅ JSON message: PASS
+  ✅ Large JSON (>5KB): PASS
+  ✅ Invalid JSON rejection: PASS
+
+Test 2/4: Python → Swift (Text)
+  ✅ JSON message: PASS
+  ✅ Large JSON (>5KB): PASS
+  ✅ Invalid JSON rejection: PASS
+
+Test 3/4: Swift → Python (Text)
+  ✅ JSON message: PASS
+  ✅ Large JSON (>5KB): PASS
+  ✅ Invalid JSON rejection: PASS
+
+Test 4/4: Swift → Swift (Text)
+  ✅ JSON message: PASS
+  ✅ Large JSON (>5KB): PASS
+  ✅ Invalid JSON rejection: PASS
+
+Text Protocol: 12/12 tests passed
+
+Protocol 1 (Binary Protocol) Tests:
+
+Test 1/4: Python → Python (Binary)
+  ✅ Binary message: PASS
+  ✅ Compressed message: PASS
+  ✅ Encrypted message: PASS
+  ✅ Compressed + encrypted: PASS
+
+Test 2/4: Python → Swift (Binary)
+  ✅ Binary message: PASS
+  ✅ Compressed message: PASS
+  ✅ Encrypted message: PASS
+  ✅ Compressed + encrypted: PASS
+
+Test 3/4: Swift → Python (Binary)
+  ✅ Binary message: PASS
+  ✅ Compressed message: PASS
+  ✅ Encrypted message: PASS
+  ✅ Compressed + encrypted: PASS
+
+Test 4/4: Swift → Swift (Binary)
+  ✅ Binary message: PASS
+  ✅ Compressed message: PASS
+  ✅ Encrypted message: PASS
+  ✅ Compressed + encrypted: PASS
+
+Binary Protocol: 16/16 tests passed
+
+========================================
+SUMMARY
+========================================
+Transport Layer:  20/20 passed ✅
+Text Protocol:    12/12 passed ✅
+Binary Protocol:  16/16 passed ✅
+----------------------------------------
+Total:            48/48 passed ✅
+========================================
+✅ ALL INTEROPERABILITY TESTS PASSED
+Exit code: 0"))
+  (section
+    (heading "Protocol Layer Testing Requirements ⚠️ MANDATORY")
+    (para "In addition to transport layer tests (UDP + HMAC), ALL implementations MUST test protocol-level interoperability.")
+    (subsection
+      (heading "Protocol 0: Text Protocol Tests")
+      (para "**Purpose:** Verify JSON message exchange works across implementations")
+      (para "**Required Tests (per language combination):**")
+      (item "1. **Simple JSON message** - Send/receive basic JSON object")
+      (item "2. **Large JSON message** - Send/receive JSON ≥5KB")
+      (item "3. **Invalid JSON rejection** - Receiver MUST reject malformed JSON")
+      (para "**Verification:**")
+      (item "JSON parses correctly in receiver")
+      (item "All fields preserved (no data loss)")
+      (item "Types preserved (strings, numbers, booleans, nulls, arrays, objects)")
+      (para "**Example Test:**")
+      (code "def test_text_protocol_python_to_swift():
+    swift_receiver = start_swift_text_receiver(port=7777)
+    message = {\"method\": \"test\", \"params\": {\"value\": 42}}
+    python_sender.send_text(message, host=\"127.0.0.1\", port=7777)
+    received = swift_receiver.wait_for_message(timeout=5)
+    assert received[\"method\"] == \"test\"
+    assert received[\"params\"][\"value\"] == 42"))
+    (subsection
+      (heading "Protocol 1: Binary Protocol Tests")
+      (para "**Purpose:** Verify binary message exchange with compression/encryption works")
+      (para "**Required Tests (per language combination):**")
+      (item "1. **Binary message** - Send/receive raw binary data")
+      (item "2. **Compressed message** - Send/receive ZLIB-compressed data")
+      (item "3. **Encrypted message** - Send/receive AES-256-GCM encrypted data")
+      (item "4. **Compressed + encrypted** - Send/receive data with both features")
+      (para "**Verification:**")
+      (item "Binary data preserved exactly (byte-identical)")
+      (item "Compression/decompression works correctly")
+      (item "Encryption/decryption works correctly")
+      (item "Combined compression + encryption works correctly")
+      (para "**Example Test:**")
+      (code "def test_binary_protocol_swift_to_python():
+    python_receiver = start_python_binary_receiver(port=7778)
+    data = b'\\x01\\x02\\x03\\x04' * 1000  # 4KB binary data
+    swift_sender.send_binary(data, compressed=True, encrypted=True,
+                            host=\"127.0.0.1\", port=7778)
+    received = python_receiver.wait_for_message(timeout=5)
+    assert received == data  # Must be byte-identical"))
+    (subsection
+      (heading "Test Count Calculation")
+      (para "For N language implementations:")
+      (para "**Transport Layer:**")
+      (item "N² combinations × 5 scenarios = N² × 5 tests")
+      (para "**Text Protocol (Protocol 0):**")
+      (item "N² combinations × 3 scenarios = N² × 3 tests")
+      (para "**Binary Protocol (Protocol 1):**")
+      (item "N² combinations × 4 scenarios = N² × 4 tests")
+      (para "**Total:**")
+      (item "N² × (5 + 3 + 4) = N² × 12 tests")
+      (para "**For Python + Swift (N=2):**")
+      (item "Transport: 4 × 5 = 20 tests")
+      (item "Text Protocol: 4 × 3 = 12 tests")
+      (item "Binary Protocol: 4 × 4 = 16 tests")
+      (item "**Total: 48 tests**")
+      (para "**All 48 tests MUST pass for system to be considered complete.**")))
+  (section
+    (heading "Build System Integration")
+    (subsection
+      (heading "YBS Step Requirements")
+      (para "Each language implementation MUST include an interop testing step:")
+      (para "**Python:**")
+      (item "Step 11 (after Step 10): Run full interop test suite")
+      (para "**Swift:**")
+      (item "Step 11 (after Step 10): Run full interop test suite")
+      (para "**Step 11 Title:** \"Cross-Language Interoperability Validation\"")
+      (para "**Step 11 Success Criteria:**")
+      (item "All N² × 12 tests pass (transport + text + binary protocols)")
+      (item "For Python + Swift: 48/48 tests pass")
+      (item "Clear reporting of which combinations tested")
+      (item "All 3 test layers pass (transport, text protocol, binary protocol)")
+      (item "No skipped tests")
+      (item "Exit code 0 on success")
+      (para "**Step 11 Cannot Be Skipped:**")
+      (item "Build is NOT complete without passing interop tests")
+      (item "Cannot promote to canonical/ without passing interop tests")
+      (item "Step 11 is as mandatory as Step 1")))
+  (section
+    (heading "Rationale")
+    (para "**Why is this so strict?**")
+    (item "1. **Wire format compatibility ≠ Network compatibility**")
+    (item "Byte-identical packets can still fail over UDP due to:")
+    (item "Socket configuration issues")
+    (item "Endianness problems")
+    (item "Buffer size mismatches")
+    (item "Timeout handling bugs")
+    (item "2. **In-memory tests miss real-world issues**")
+    (item "Port conflicts")
+    (item "Network permissions")
+    (item "OS-specific socket behavior")
+    (item "Packet loss handling")
+    (item "3. **Cross-language bugs are subtle**")
+    (item "Type conversions (bytes vs SymmetricKey)")
+    (item "API mismatches (parameter names)")
+    (item "Error handling differences")
+    (item "4. **Production deployments require certainty**")
+    (item "Cannot assume compatibility")
+    (item "Must prove with running code")
+    (item "No surprises in production")
+    (para "**This specification ensures YX protocol implementations are truly interoperable, not just theoretically compatible.**"))
+  (section
+    (heading "Version History")
+    (item "**1.0.0** (2026-01-18): Initial specification")))
