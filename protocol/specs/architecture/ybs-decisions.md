@@ -218,3 +218,50 @@ Swift; single codesigned binaries beat interpreter/venv maintenance.
 The node daemon treats discovery as a strategy so mDNS/Bonjour (NWBrowser /
 NetService) can be added without protocol changes. Discovery is NOT membership;
 the HMAC key remains the only trust boundary (D08).
+
+## D11: S-expression is the canonical structured payload format (2026-07-19)
+
+**Status:** Accepted. **Author:** Scott D. Yelich.
+
+**Context.** yx Protocol 0 was defined as "text / JSON-RPC"; the node/message layer
+exchanged JSON objects (`{"method":…,"params":…}`) and briefly spooled messages as UNF
+(YAML-frontmatter + markdown). The surrounding ecosystem is s-expression native (ybs
+`.sbs`, `.sxp`, the portfolio data block, the FSMB message schema). JSON/JSONL repeatedly
+forces newline framing and full-document buffering to know when a value is complete.
+
+**Decision — across the board.** Any payload richer than plaintext is an **S-expression,
+not JSON.** S-expression is the base/default structured format, and is **preferred even
+over plaintext when practical.** Preference order for a payload:
+**S-expression > plaintext > binary** — use the most structured form that fits; drop to
+plaintext only for opaque pass-through text, binary only for non-text.
+
+Concretely for yx:
+- The message body is a single s-expression: `(msg …)` (see message-format spec).
+- Protocol 0's RPC/message layer migrates from JSON-RPC to s-expression forms **dispatched
+  on the head symbol (car)**: `(node-hello …)`, `(node-info)`, `(msg …)`. The head atom is
+  the verb; the rest are its arguments. No `{"method","params"}` envelope.
+- On-disk representations are `.sxp` s-expressions — never YAML/JSON/markdown wrappers.
+  **UNF is retired.**
+
+**Rationale.**
+- **Always-known parse state.** Track paren depth; a form is complete exactly when depth
+  returns to 0. Framing is self-delimiting and uniform — no length prefix, no JSONL
+  convention, no "read to a terminator you may not have received yet." Critical for a
+  datagram protocol and for streaming agent output (vs. the JSONL buffering murphy needs).
+- **One grammar, uniform nesting** — structured data nests natively without escaping.
+- **Ecosystem consistency** — everything else already speaks s-expr; JSON was the outlier.
+- **Human-writable, no library required** — legible and hand-editable (FSMB-proven).
+
+**Consequences.**
+- Protocol 0 is redefined: text = s-expression, dispatched on the car. Existing JSON-RPC
+  handlers (`node.hello`/`node.info`/`msg.deliver`) get rewritten to s-expr forms; a
+  transition shim MAY accept both briefly.
+- `yxnode` stops writing UNF; it carries and (if spooling) stores `(msg …)` as `.sxp`.
+- **JSON is confined to EXTERNAL edges** where a foreign contract requires it — the
+  OpenAI-compatible LLM endpoints (mlx-router), MCP, third-party HTTP APIs. **Internal
+  yx/agent payloads are never JSON.**
+- Forward-looking and where-feasible: not a mandate to rewrite every existing JSON emitter
+  at once (e.g. murphy's JSONL event stream is an external-ish contract — migrate when
+  practical). New code follows this default from the start.
+- Composes with D08: optional `(key-id …)`/`(sig …)` fields slot into the grammar later
+  for per-message signing without a schema break.
