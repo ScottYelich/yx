@@ -4,7 +4,6 @@ builds/*/
 
 # YBS Session Files (crash recovery, in build directories)
 SESSION.md
-BUILD_STATUS.md
 BUILD_CONFIG.json
 
 # Scratch directory (temporary notes, session files)

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>yx · README</title>
+<title>yx · v2.1.0</title>
 <style>
 /*! EMBEDDED ASSET — readme.css
  * source:  https://github.com/ScottYelich/portfolio/blob/main/style/readme.css
@@ -63,6 +63,7 @@ a:hover{text-decoration:underline}
   <nav class="topbar">
     <a class="home" href="https://scottyelich.github.io/portfolio/">← Portfolio</a>
     <span class="crumb">yx</span>
+    <span class="src">v2.1.0 · updated 2026-07-19</span>
   </nav>
   <article class="markdown-body">
 <blockquote>
@@ -72,111 +73,111 @@ portfolio</a></strong> — the public starting point for these projects. ·
 📄 <strong>Web version:</strong> open <a
 href="index.html"><code>index.html</code></a> in a browser.</p>
 </blockquote>
-<h1 id="yx-system">YX System</h1>
-<p><strong>YX</strong> is a secure, payload-agnostic UDP-based
-networking protocol with HMAC integrity, optional
-encryption/compression, and chunked delivery for large messages.</p>
+<h1 id="yx">YX — secure UDP messaging protocol</h1>
+<p><strong>Author:</strong> Scott D. Yelich · <strong>Updated:</strong>
+2026-07-19 · <strong>Version:</strong> 2.1.0</p>
+<p><strong>YX</strong> is a secure, payload-agnostic <strong>UDP messaging
+protocol</strong> with a byte-identical wire format across Swift and Python.
+The canonical implementation is the production code promoted from the
+<code>sdts</code> trading system, where it runs AlgoTrader's service mesh —
+sdts now consumes yx back as a git-submodule dependency.</p>
 <h2 id="overview">Overview</h2>
-<p>YX provides a lightweight, secure transport layer for distributed
-systems:</p>
+<p>Packet: <code>HMAC-SHA256(16B) + GUID(6B sender id) + payload</code>, over
+UDP. No TCP, no PKI.</p>
 <ul>
-<li>UDP broadcast-based communication</li>
-<li>HMAC-SHA256 packet integrity</li>
+<li><strong>Protocol 0</strong> — text / JSON-RPC</li>
+<li><strong>Protocol 1 v2.0</strong> — binary: 65,535 channels, chunking,
+per-channel sequences</li>
+<li>HMAC-SHA256 packet integrity (16-byte truncated), constant-time compare</li>
 <li>Optional AES-256-GCM encryption</li>
-<li>Optional ZLIB compression</li>
-<li>Multi-packet chunking for large messages</li>
-<li>Channel-based message isolation (65K channels)</li>
-<li>Cross-platform wire format (Python/Swift parity)</li>
+<li>Broadcast-based peer discovery</li>
+<li>Byte-identical wire format across Swift and Python</li>
 </ul>
-<h2 id="this-is-a-ybs-system">This is a YBS System</h2>
-<p>This directory follows the <a
-href="https://github.com/ScottYelich/ybs">YBS (Yelich Build System)</a>
-structure:</p>
+<h2 id="swift-first">Swift-first (ADR D09)</h2>
+<p>Swift is the base implementation, consumed via <strong>SPM</strong> — this
+repo IS the Swift package. Libraries: <code>Primitives</code>,
+<code>Transport</code>, <code>RPC</code>, <code>YX</code>. Executables:</p>
 <ul>
-<li><code>specs/</code> - Specifications defining WHAT YX is and
-does</li>
-<li><code>steps/</code> - Build steps defining HOW to implement YX
-(organized by language)</li>
-<li><code>builds/</code> - Build workspaces for different YX
-implementations</li>
-<li><code>canonical/</code> - Shared reference artifacts for
-cross-implementation validation</li>
-<li><code>tests/</code> - System-level and interoperability tests</li>
-<li><code>docs/</code> - Additional documentation</li>
+<li><strong><code>yxCLI</code></strong> — test/demo CLI (drives the live
+cross-language smoke test)</li>
+<li><strong><code>yxkey</code></strong> — mesh key manager
+(<code>generate|set|get|list|remove</code>; <code>set</code> reads stdin,
+never argv). Mesh HMAC keys live in the <strong>macOS Keychain</strong>
+(ADR D08, service <code>org.spy.yx</code>); resolution order:
+<code>--key</code> flag &gt; <code>YX_KEY</code> env &gt; Keychain &gt;
+built-in dev key (with a loud warning). Spec:
+<code>protocol/specs/architecture/key-management.md</code>.</li>
+<li><strong><code>yxnode</code></strong> — base mesh node daemon and the
+canonical "how to build a service on yx" example: heartbeats presence
+(<code>node.hello</code>), answers <code>node.info</code> RPC, and on inbound
+<code>msg.deliver</code> writes a Unified Node Format (UNF) markdown file
+(YAML frontmatter + body) to <code>~/ai/mail/YYYY/MM/&lt;id&gt;.md</code> for
+locally-addressed agents. Swift <code>yxnode</code> is production; the Python
+<code>yxnode</code> is spec-proof only.</li>
 </ul>
-<p>Learn more about YBS: <a
-href="https://github.com/ScottYelich/ybs">https://github.com/ScottYelich/ybs</a></p>
-<h2 id="multi-language-implementation">Multi-Language
-Implementation</h2>
-<p>YX is designed to have implementations in multiple languages with
-guaranteed wire format compatibility:</p>
-<h3 id="primary-implementations">Primary Implementations</h3>
-<ul>
-<li><strong>Python</strong> (<code>canonical/python/</code>) - Reference
-implementation, generates canonical test vectors</li>
-<li><strong>Swift</strong> (<code>canonical/swift/</code>) -
-High-performance implementation, validates against canonical test
-vectors</li>
-</ul>
-<p>(The YBS build is authored under
-<code>builds/{python,swift}-impl/</code> and <em>promoted</em> into
-<code>canonical/</code> — <code>canonical/</code> is the committed
-source of truth.)</p>
-<h3 id="build-order">Build Order</h3>
-<ol type="1">
-<li><strong>Python first</strong> - Generates canonical artifacts in
-<code>canonical/</code></li>
-<li><strong>Swift second</strong> - Validates against Python's canonical
-artifacts</li>
-<li><strong>Interop tests</strong> - Verifies Python ↔︎ Swift
-communication (<code>tests/interop/</code>)</li>
-</ol>
-<p>All implementations must produce byte-identical packets for the same
-inputs.</p>
-<h2 id="getting-started">Getting Started</h2>
-<h3 id="python-implementation">Python implementation</h3>
-<div class="sourceCode" id="cb1"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> canonical/python <span class="kw">&amp;&amp;</span> <span class="va">PYTHONPATH</span><span class="op">=</span>src <span class="ex">python3</span> <span class="at">-m</span> pytest src/ tests/ <span class="at">-q</span></span></code></pre></div>
-<h3 id="swift-implementation">Swift implementation</h3>
-<div class="sourceCode" id="cb2"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> canonical/swift <span class="kw">&amp;&amp;</span> <span class="ex">swift</span> test</span></code></pre></div>
-<h3 id="running-interop-tests-full-48-test-matrix-real-udp">Running
-interop tests (full 48-test matrix, real UDP)</h3>
-<div class="sourceCode" id="cb3"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> tests/interop/run_matrix.py</span></code></pre></div>
+<p>The Python implementation (<code>src/python/</code>) is kept for
+<strong>wire-parity validation</strong> and the two Python-bound edges
+(ib_async, MLX). It is used in-tree / via submodule path — there is
+<strong>no pip/PyPI distribution</strong>.</p>
 <h2 id="current-status">Current Status</h2>
 <ul>
-<li>✅ Protocol specification complete
-(<code>specs/technical/yx-protocol-spec.md</code>)</li>
-<li>✅ Testing strategy defined
-(<code>specs/testing/testing-strategy.md</code>)</li>
-<li>✅ Build steps authored (Steps 0–15 for both Python and Swift under
-<code>steps/</code>)</li>
-<li>✅ <strong>Python implementation complete</strong>
-(<code>canonical/python/</code>) — Transport, Protocol 0
-(Text/JSON-RPC), Protocol 1 (Binary: compression / AES-256-GCM /
-chunking + reassembly), security (replay protection + rate limiting);
-<strong>148 unit tests pass</strong></li>
-<li>✅ <strong>Swift implementation complete</strong>
-(<code>canonical/swift/</code>) — same feature set; <strong>67 tests
-pass</strong> (43 XCTest + 24 Swift Testing)</li>
-<li>✅ <strong>Cross-language interoperability: 48/48 tests
-pass</strong> over real UDP sockets (Transport 20, Protocol 0 12,
-Protocol 1 16; Python↔︎Python, Python↔︎Swift, Swift↔︎Python, Swift↔︎Swift) —
-run via <code>tests/interop/run_matrix.py</code></li>
+<li>✅ Production v2.0.0 implementation re-homed from sdts as the canonical
+source of truth (v2.1.0 adds two Swift transport fixes)</li>
+<li>✅ <strong>Cross-language interop proven live</strong> (2026-07-19):
+real Python↔Swift UDP — two-node mutual discovery + cross-language message
+delivery (Swift node ↔ Python node), keyed from the Keychain</li>
+<li>✅ <strong>94 Swift + 47 Python unit tests passing</strong></li>
+<li>✅ <code>yxkey</code> Keychain key management (ADR D08)</li>
+<li>✅ <code>yxnode</code> mesh node daemon
+(presence · <code>node.info</code> · <code>msg.deliver</code> → UNF)</li>
+<li>✅ Consumed by <code>sdts</code> (AlgoTrader service mesh + ib-bridge)</li>
 </ul>
+<h2 id="honest-limitations">Honest limitations</h2>
+<ul>
+<li>Best-effort UDP — the reliability/message-bus layer (ack/retry/dedup) is
+not built yet</li>
+<li>Bonjour/mDNS not implemented (ADR D10 designs for it; broadcast only
+today)</li>
+<li>Mesh-key distribution is manual (per-node Keychain)</li>
+<li>The older line's formal 48-test interop matrix has not been re-run on v2
+framing — interop is proven via the live cross-language node tests plus the
+unit suites</li>
+</ul>
+<h2 id="architecture-decisions">Architecture decisions</h2>
+<p>ADRs live in <code>protocol/specs/architecture/ybs-decisions.md</code>:</p>
+<ul>
+<li><strong>D08</strong> — mesh keys live in the macOS Keychain, never in
+repos</li>
+<li><strong>D09</strong> — Swift is the base implementation; Python is
+validation + edges</li>
+<li><strong>D10</strong> — discovery is pluggable: UDP broadcast now,
+Bonjour/mDNS later</li>
+</ul>
+<h2 id="ecosystem">Ecosystem</h2>
+<p>yx is the transport/data-plane of the portfolio: it underpins a
+cross-machine agent message bus (<strong>laniakea</strong> stands nodes up and
+its <code>svc</code> tool supervises them; <code>yxnode</code> connects them),
+sibling Swift agents (<strong>murphy</strong>, <strong>agent</strong>,
+<strong>dagsmith</strong>, <strong>memory</strong>, <strong>mind</strong>) can
+message over it, and its spec discipline comes from <strong>ybs</strong>. The
+earlier YBS clean-room rebuild is preserved on branch
+<code>archive/main-ybs-completed</code> (tag <code>pre-main-reconcile</code>).</p>
 <h2 id="reference-documentation">Reference Documentation</h2>
 <ul>
-<li><code>docs/ybs-overview.md</code> - Introduction to YBS
-framework</li>
-<li><code>docs/ybs-framework-spec.md</code> - Complete YBS framework
-specification</li>
-<li><code>specs/technical/yx-protocol-spec.md</code> - YX UDP protocol
-specification</li>
+<li><code>README.md</code> — layout, quick start, executables &amp; mesh/key
+model</li>
+<li><code>docs/yx.md</code> — executive summary</li>
+<li><code>BUILD_STATUS.md</code> — current status, tests, next steps</li>
+<li><code>protocol/specs/architecture/key-management.md</code> — key
+management spec</li>
+<li><code>protocol/specs/architecture/ybs-decisions.md</code> — ADRs
+D08/D09/D10</li>
 </ul>
+<p>Repo: <a
+href="https://github.com/ScottYelich/yx">github.com/ScottYelich/yx</a></p>
 
   </article>
-  <footer class="foot">Part of <a href="https://scottyelich.github.io/portfolio/">ScottYelich · portfolio</a> — the public starting point for these projects. Rendered 2026-06-05T06:47:02Z.</footer>
+  <footer class="foot">Part of <a href="https://scottyelich.github.io/portfolio/">ScottYelich · portfolio</a> — the public starting point for these projects. · Author: Scott D. Yelich · yx v2.1.0 · Updated 2026-07-19.</footer>
 </div>
 </body>
 </html>

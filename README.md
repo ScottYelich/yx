@@ -1,5 +1,7 @@
 # YX — secure UDP messaging protocol (Python + Swift)
 
+**Author:** Scott D. Yelich · **Updated:** 2026-07-19 · **Version:** 2.1.0
+
 **v2.1.0** — the production YX v2.0.0 implementation (promoted from sdts, where it runs
 AlgoTrader's service mesh) re-homed here as the canonical source of truth, plus two
 transport fixes and **live cross-language UDP interop verified** (2026-07-19).
@@ -11,10 +13,12 @@ Optional AES-256-GCM. Broadcast-based peer discovery. No TCP, no PKI.
 ## Layout
 
 ```
-Package.swift, Sources/, Tests/   Swift implementation (4 targets: Primitives,
-                                  Transport, RPC, YX) — SPM package at repo root
+Package.swift, Sources/, Tests/   Swift implementation — SPM package at repo root
+                                  (libraries: Primitives, Transport, RPC, YX;
+                                  executables: yxkey, yxnode)
 yxCLI/                            Swift test/demo CLI (path-dep on ../)
-src/python/                       Python implementation (pip: yx-networking)
+src/python/                       Python implementation — used in-tree / via submodule
+                                  path for wire-parity validation (NO pip/PyPI distribution)
     yx/           the package     yxCLI/  python CLI (python -m yxCLI)
     tests/        47 tests
 protocol/specs/                   language-agnostic specs; v2 spec + v1->v2 migration
@@ -43,6 +47,31 @@ yxCLI/.build/debug/yxCLI --port 50100 --peers 127.0.0.1:50200 --shutdown-after 1
 
 Note: use explicit IPs or broadcast; sockets are IPv4 (`localhost` may resolve to ::1).
 
+## Executables & the mesh/key model
+
+Swift is the base implementation (ADR D09); consume it via SPM — this repo is the
+package. Three executables ship with it:
+
+- **`yxCLI`** (`yxCLI/`, separate package with a path-dep on this repo) — test/demo
+  CLI; drives the live cross-language smoke test above.
+- **`yxkey`** — mesh key manager (`generate|set|get|list|remove`; `set` reads stdin,
+  never argv). Mesh HMAC keys live in the **macOS Keychain** (ADR D08), service
+  `org.spy.yx`, account = mesh name. Key resolution order (`MeshKey`): `--key` flag >
+  `YX_KEY` env > Keychain > built-in dev key (with a loud warning). Python mirrors
+  this via `security` in `src/python/yx_key.py`.
+  Spec: `protocol/specs/architecture/key-management.md`.
+- **`yxnode`** — base mesh node daemon and the canonical "how to build a service on
+  yx" example: heartbeats presence (`node.hello`), answers `node.info` RPC, and on
+  inbound `msg.deliver` writes a Unified Node Format (UNF) markdown file (YAML
+  frontmatter + body) to `~/ai/mail/YYYY/MM/<id>.md` for locally-addressed agents.
+  Swift `yxnode` is production; the Python `yxnode` (`src/python/yxnode`) is
+  spec-proof only. Proven: two-node mutual discovery + cross-language delivery
+  (Swift node ↔ Python node), keyed from the Keychain.
+
+ADRs live in `protocol/specs/architecture/ybs-decisions.md`: D08 Keychain keys ·
+D09 Swift-first · D10 pluggable discovery (UDP broadcast now, Bonjour/mDNS later).
+See `docs/yx.md` for the executive summary and `BUILD_STATUS.md` for current status.
+
 ## History / branches
 
 - `archive/ybs-rebuild-v1` (tag `pre-v2-import`) — the YBS spec-driven v1 rebuild this
@@ -52,7 +81,12 @@ Note: use explicit IPs or broadcast; sockets are IPv4 (`localhost` may resolve t
 
 ## Known follow-ups
 
-- Adapt the 48-test interop matrix to v2 framing (`tests/interop-v1-legacy/`).
+- Message-bus reliability layer (ack/retry/dedup) — not built yet; UDP is best-effort.
+- Adapt the 48-test interop matrix to v2 framing (`tests/interop-v1-legacy/`) —
+  until then, interop is proven via live cross-language node tests + the unit suites.
+- Bonjour/mDNS discovery (ADR D10) — designed-for, not implemented; broadcast only.
+- Mesh-key distribution is manual (per-node Keychain via `yxkey`).
 - `yxcli` console-script entry point calls async main without asyncio.run (use
   `python -m yxCLI` instead until fixed).
-- Dev HMAC key in tests/docs is a LAN development default — override via `--key`.
+- Dev HMAC key in tests/docs is a LAN development default — set a real mesh key via
+  `yxkey` (or override with `--key` / `YX_KEY`).

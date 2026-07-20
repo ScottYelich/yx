@@ -1,32 +1,36 @@
 # yx — executive summary
 
-**One-liner:** A secure, payload-agnostic UDP packet protocol with HMAC integrity and byte-identical wire format across Python and Swift implementations.
+**One-liner:** A secure, payload-agnostic UDP messaging protocol with HMAC integrity and a byte-identical wire format across Swift and Python — the production code promoted from the `sdts` trading system, where it runs AlgoTrader's service mesh.
 
 ## What it provides
-- A lightweight transport layer for distributed/LAN systems: UDP broadcast delivery with HMAC-SHA256 packet integrity (16-byte truncated), optional AES-256-GCM encryption, optional ZLIB compression, and chunked delivery for large messages.
-- A defined 3-layer wire format (HMAC + 6-byte sender GUID + variable payload) with both a text protocol and a binary protocol, channel-based message isolation (up to ~65K channels), and a default port of 50000.
-- Cross-language parity by construction: the Python build is the reference implementation and emits canonical test vectors and reference packets; the Swift build validates byte-for-byte against those canonical artifacts.
-- A full YBS-managed spec/step/build structure (specs define WHAT, steps define HOW per language, builds are workspaces, canonical holds shared validation artifacts) plus a working Python and Swift implementation under `canonical/`.
+- A lightweight transport layer for distributed/LAN systems: UDP delivery with HMAC-SHA256 packet integrity (16-byte truncated), optional AES-256-GCM encryption, chunked delivery for large messages, and broadcast-based peer discovery. No TCP, no PKI.
+- A defined wire format — `HMAC-SHA256(16B) + GUID(6-byte sender id) + payload` — with two payload protocols: **Protocol 0** (text / JSON-RPC) and **Protocol 1 v2.0** (binary with 65,535 channels, chunking, and per-channel sequences).
+- **Swift-first** (ADR D09): Swift is the base implementation, consumed via SPM — this repo IS the Swift package (libraries `Primitives`, `Transport`, `RPC`, `YX`; executables `yxCLI` test/demo, `yxkey` key manager, `yxnode` mesh node daemon). The Python implementation (`src/python/`) is kept for wire-parity validation and the two Python-bound edges (ib_async, MLX). There is **no pip distribution**.
+- **Keychain-backed key management** (ADR D08): mesh HMAC keys live in the macOS Keychain, managed by the `yxkey` CLI (`generate|set|get|list|remove`; `set` reads stdin, never argv) and resolved as `--key` flag > `YX_KEY` env > Keychain (service `org.spy.yx`) > built-in dev key with a loud warning. Python mirrors this via the `security` tool in `src/python/yx_key.py`. Spec: [`protocol/specs/architecture/key-management.md`](../protocol/specs/architecture/key-management.md).
+- A base mesh node daemon, **`yxnode`** — also the canonical "how to build a service on yx" example. It heartbeats presence (`node.hello`), answers `node.info` RPC, and on inbound `msg.deliver` writes a Unified Node Format (UNF) markdown file (YAML frontmatter + body) to `~/ai/mail/YYYY/MM/<id>.md` when the message is addressed to a local agent. A Swift `yxnode` is production; a Python `yxnode` exists as spec-proof.
 
 ## Strengths
-- Clear, versioned protocol specification (v1.0.3 / Binary Protocol v2.0) with an exact wire-format layout, making third-party implementations feasible.
-- Strong guarantee model: implementations must produce byte-identical packets for identical inputs, enforced via canonical test vectors rather than prose.
-- Solid security primitives chosen sensibly (HMAC-SHA256 with constant-time compare, AES-256-GCM, CSPRNG-generated GUIDs).
-- Reproducible, AI-agent-driven build methodology via YBS, with crash-recovery session handling and per-step status tracking.
-- Independent test coverage is real: ~100 Python unit tests plus integration tests, and Swift canonical validation passing 3/3 vectors.
+- **Production-proven lineage:** this is the code that runs AlgoTrader's service mesh inside `sdts`, re-homed here as the canonical source of truth; `sdts` now consumes yx as a git-submodule dependency.
+- **Cross-language interop is proven** (2026-07-19): live Python↔Swift messaging over real UDP — two-node mutual discovery and cross-language message delivery (Swift node ↔ Python node), all keyed from the Keychain — backed by **94 Swift + 47 Python** unit tests.
+- Strong guarantee model: Swift and Python must produce byte-identical packets for identical inputs; the Python implementation exists specifically to hold the Swift base honest at the wire level.
+- Solid security primitives chosen sensibly (HMAC-SHA256 with constant-time compare, AES-256-GCM, CSPRNG-generated GUIDs), with keys kept out of repos entirely (Keychain, ADR D08).
+- Clear, versioned protocol specification and architecture decision record ([`protocol/specs/architecture/ybs-decisions.md`](../protocol/specs/architecture/ybs-decisions.md): D08 Keychain keys, D09 Swift-first, D10 pluggable discovery) — spec discipline inherited from **ybs**.
 
 ## Weaknesses / limitations
-- Cross-language UDP interoperability is unproven. Only wire-format compatibility is verified; actual Python↔Swift, Swift→Python, and Swift→Swift network communication is untested due to Swift API mismatches (SymmetricKey vs raw bytes, parameter naming) and a broken `test_all_combinations.py` harness.
-- Documentation is internally inconsistent: the top-level README and CLAUDE.md still claim "no builds exist yet" and "steps need to be created," while build steps, working Python/Swift code, and an INTEROP_STATUS report already exist. The README understates current maturity.
-- The mandated "48/48 interop tests" completion bar is not met, so by the project's own definition the system is not formally "complete."
-- UDP broadcast transport implies no built-in delivery guarantees, ordering, or retransmission beyond the chunking layer; replay protection and key distribution are out of scope.
-- Production-readiness is currently scoped to same-language use only.
+- Best-effort UDP: the reliability/message-bus layer (ack/retry/dedup) is not built yet.
+- Discovery is UDP broadcast only; Bonjour/mDNS is designed-for (ADR D10) but not implemented.
+- Mesh-key distribution is manual — each node's Keychain is provisioned by hand.
+- The older line's formal 48-test interop matrix has not been re-run against v2 framing; interop is instead proven via live cross-language node tests plus the unit suites.
 
 ## Why you'd use it
-Use yx when you need a small, auditable, authenticated message protocol over UDP for trusted LAN/distributed systems — especially when the same protocol must be spoken from multiple languages (e.g., a Python tool and a Swift agent) and you need a hard guarantee that their packets are bit-identical. It is a protocol/data-plane building block, not a general-purpose networking stack.
+Use yx when you need a small, auditable, authenticated message protocol over UDP for trusted LAN/distributed systems — especially when the same protocol must be spoken from Swift and Python and you need a hard guarantee that their packets are bit-identical. It is a protocol/data-plane building block, not a general-purpose networking stack.
 
 ## How it relates to the other projects
-yx is the data/protocol layer of the portfolio and is itself built with **ybs** (the S-expression spec/step build methodology), sharing that family's spec→step→build discipline and canonical-artifact validation philosophy with siblings like **gws** and **yobro**. Its Python-reference / Swift-validates split mirrors the Swift-heavy execution tier of the ecosystem (**murphy**, **agent**), and it is a natural transport for LAN-oriented AI workflows such as **laniakea** and for message passing between agentic components (**mind**, **memory**, **dagsmith**). Where those projects orchestrate work and reason over content, yx provides the secure wire format that could carry messages between their distributed nodes.
+yx is the transport/data-plane of the portfolio ecosystem. It underpins a cross-machine **agent message bus**: **laniakea** stands nodes up (its `svc` tool supervises them) and `yxnode` connects them, so sibling Swift agents (**murphy**, **agent**, **dagsmith**, **memory**, **mind**) can message over it. **sdts** consumes it directly for the AlgoTrader service mesh and the ib-bridge trading adapter. Its spec/ADR discipline comes from **ybs** (the earlier YBS clean-room rebuild is preserved on branch `archive/main-ybs-completed`, tag `pre-main-reconcile`).
+
+See also: [`README.md`](../README.md) (layout + quick start), [`BUILD_STATUS.md`](../BUILD_STATUS.md) (current status), [key-management spec](../protocol/specs/architecture/key-management.md), [ADRs](../protocol/specs/architecture/ybs-decisions.md).
 
 ---
 *Executive summary — condensed from this repo's own docs. Part of [ScottYelich · portfolio](https://scottyelich.github.io/portfolio/), the public starting point for these projects.*
+
+*Author: Scott D. Yelich · Updated 2026-07-19 · yx v2.1.0*
