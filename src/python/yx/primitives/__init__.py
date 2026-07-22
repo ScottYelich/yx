@@ -15,12 +15,17 @@ from .sexpr import SExpr
 from .sexpr_sign import canonical_msg_bytes
 from . import signer
 from . import trusted_signers
+from .test_helpers import TestConfig, SimplePacketBuilder, send_udp_packet, send_udp_packets
 
 __all__ = [
     "SExpr",
     "canonical_msg_bytes",
     "signer",
     "trusted_signers",
+    "TestConfig",
+    "SimplePacketBuilder",
+    "send_udp_packet",
+    "send_udp_packets",
     "GUIDFactory",
     "guid_to_hex",
     "hex_to_guid",

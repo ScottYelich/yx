@@ -15,10 +15,11 @@ public actor RateLimiter {
     /// Creates a rate limiter with specified limits.
     ///
     /// - Parameters:
-    ///   - maxRequests: Maximum requests allowed per window (default: 100)
+    ///   - maxRequests: Maximum requests allowed per window (default: 10000 —
+    ///     high-frequency trading services stream hundreds of ticks/second)
     ///   - windowDuration: Time window in seconds (default: 60 seconds)
     public init(
-        maxRequests: Int = 100,
+        maxRequests: Int = 10000,
         windowDuration: TimeInterval = 60.0
     ) {
         self.maxRequests = maxRequests

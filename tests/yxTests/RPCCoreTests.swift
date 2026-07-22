@@ -101,7 +101,11 @@ final class RPCCoreTests: XCTestCase {
     }
 
     func testUnknownMethod() {
-        let expectation = XCTestExpectation(description: "RPC error for unknown method")
+        // Broadcast-mesh contract: an unknown method is silently ignored — no error
+        // reply. Every service receives every broadcast and handles only its own
+        // methods; error replies here would flood the network.
+        let expectation = XCTestExpectation(description: "no reply for unknown method")
+        expectation.isInverted = true
         nonisolated(unsafe) let json: [String: Any] = [
             "jsonrpc": "2.0",
             "id": "unknown-method",
@@ -111,20 +115,12 @@ final class RPCCoreTests: XCTestCase {
 
         Task { @MainActor in
             let dispatcher = await makeDispatcher()
-            await dispatcher.handle(json: json) { response in
-                guard let response = response as? [String: Any],
-                      let error = response["error"] as? [String: Any],
-                      let message = error["message"] as? String else {
-                    XCTFail("Missing or invalid error response")
-                    expectation.fulfill()
-                    return
-                }
-                XCTAssert(message.contains("No handler"), "Error message should mention missing handler")
-                expectation.fulfill()
+            await dispatcher.handle(json: json) { _ in
+                expectation.fulfill()  // any reply = failure (inverted expectation)
             }
         }
 
-        wait(for: [expectation], timeout: 2.0)
+        wait(for: [expectation], timeout: 0.5)
     }
 }
 
