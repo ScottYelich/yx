@@ -83,7 +83,9 @@ class RPCDispatcher:
             # Find handler
             handler = self.handlers.get(method)
             if not handler:
-                logger.warning(f"No handler for method: {method}")
+                # debug, not warning: on a broadcast mesh every service sees every
+                # method and ignores most of them — this is the normal case
+                logger.debug(f"No handler for method: {method}")
                 return
 
             # Dispatch

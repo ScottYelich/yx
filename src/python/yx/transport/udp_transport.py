@@ -12,6 +12,7 @@ from ..primitives.guid import guid_to_hex
 from .packet_builder import PacketBuilder
 from .key_store import KeyStore
 from .rate_limiter import RateLimiter
+from .replay_protection import ReplayProtection
 
 logger = Logger("UDPTransport")
 
@@ -24,6 +25,7 @@ class UDPTransport:
         guid: bytes,
         key_store: KeyStore,
         rate_limiter: Optional[RateLimiter] = None,
+        replay_protection: Optional[ReplayProtection] = None,
         port: int = 50000,
         process_own_packets: bool = False
     ):
@@ -34,12 +36,14 @@ class UDPTransport:
             guid: Local GUID (6 bytes)
             key_store: Key store for per-peer keys
             rate_limiter: Optional rate limiter
+            replay_protection: Optional replay protection (default: 300s nonce expiry)
             port: UDP port to listen on
             process_own_packets: Whether to process packets from self
         """
         self.guid = guid
         self.key_store = key_store
         self.rate_limiter = rate_limiter or RateLimiter()
+        self.replay_protection = replay_protection or ReplayProtection()
         self.port = port
         self.process_own_packets = process_own_packets
 
@@ -158,8 +162,14 @@ class UDPProtocol(asyncio.DatagramProtocol):
                 logger.error(f"HMAC validation failed from {peer_id} at {addr[0]}:{addr[1]}")
                 return
 
-            # Rate limiting
-            if not self.transport_obj.rate_limiter.check_rate_limit(peer_id):
+            # Replay protection (use HMAC as nonce)
+            nonce = data[:16]  # First 16 bytes = HMAC
+            if not self.transport_obj.replay_protection.check_and_record(nonce):
+                logger.warning(f"Replay attack detected from {peer_id} at {addr[0]}:{addr[1]}")
+                return
+
+            # Rate limiting (source_addr passed for logging/diagnostics)
+            if not self.transport_obj.rate_limiter.check_rate_limit(peer_id, source_addr=addr):
                 logger.warning(f"Rate limited {peer_id}")
                 return
 

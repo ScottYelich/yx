@@ -100,7 +100,11 @@ public actor RPCDispatcher {
         if let handler = handlers[method] {
             await handler(request)
         } else {
-            request.reply(error: "No handler registered for method '\(method)'")
+            // Silent ignore for broadcast messages - unhandled methods are expected
+            // in a broadcast network architecture (services receive all broadcasts,
+            // only handle relevant ones). No error reply sent to avoid flooding
+            // network when multiple services ignore the same broadcast.
+            return
         }
     }
 }
