@@ -25,6 +25,21 @@ implementations with verified live Python↔Swift interop.
      `UDPTransport.receiveLoop` is deliberately `nonisolated` + `Task.detached`.
   2. Never fire-and-forget the keep-alive/shutdown path in a CLI main — the process
      exits and kills all tasks.
+- **Wire landmines (both proved live laptop↔colossus 2026-07-27, first cross-machine
+  exchange on the v2.2 wire). Both fail SILENTLY — they look identical to "the other
+  machine is down", so you debug the wrong thing:**
+  1. **Discovery must BROADCAST, never unicast.** Peers bind `*:50000` with
+     `SO_REUSEPORT`, so a unicast datagram is load-balanced by the kernel to exactly
+     ONE socket — with 3 services up you get 1 reply and conclude the other 2 are dead.
+     Broadcast to `255.255.255.255:50000` reaches all of them. Replies come back as
+     broadcast regardless: `_handle_discover` (sdts `lib/rpc/server.py`) broadcasts a
+     `system.heartbeat` rather than responding to the sender's address — so a listener
+     must be bound to `:50000`, not just reading the send socket's replies.
+  2. **The HMAC key is the 32 DECODED bytes, not the 64-char ASCII.** `etc/shared_key.txt`
+     holds 64 hex chars; `YX.py` does `bytes.fromhex(key)`. Passing the file's text
+     straight through builds a well-formed packet that every peer drops on HMAC
+     mismatch — no error, no log, just silence. Verify both ends' key files hash
+     identically before blaming the network.
 - `UDPNetworking.send` is fire-and-forget (`Task { await actor.send }`) — sends are
   async with no backpressure; don't assume synchronous delivery.
 - sdts consumes this repo as a dependency (`deps/yx` submodule). API changes here can
