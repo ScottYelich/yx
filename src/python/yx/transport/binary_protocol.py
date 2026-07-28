@@ -142,7 +142,12 @@ class BinaryProtocol:
                         # Binary protocol carries JSON-RPC messages (same as text protocol)
                         from ..primitives.json_utils import json_decode_bytes
                         message = json_decode_bytes(complete_data)
-                        logger.info(f"Received binary message (ch={channel_id}, seq={sequence}): {message}")
+                        # Truncate: a full 95KB payload in one log line froze
+                        # services writing to full pipes (2026-07-28)
+                        preview = str(message)
+                        if len(preview) > 300:
+                            preview = preview[:300] + f"… (+{len(preview) - 300} chars)"
+                        logger.info(f"Received binary message (ch={channel_id}, seq={sequence}): {preview}")
                         await self.on_message(message)
                     except Exception as e:
                         logger.error(f"Failed to parse binary message as JSON: {e}")

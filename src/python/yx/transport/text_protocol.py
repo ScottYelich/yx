@@ -67,7 +67,10 @@ class TextProtocol:
         # Legacy JSON path
         try:
             message = json_decode_bytes(payload)
-            logger.info(f"Received text message: {message}")
+            preview = str(message)
+            if len(preview) > 300:
+                preview = preview[:300] + f"… (+{len(preview) - 300} chars)"
+            logger.info(f"Received text message: {preview}")
             if self.on_message:
                 await self.on_message(message)
         except Exception as e:
