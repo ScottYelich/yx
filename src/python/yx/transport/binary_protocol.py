@@ -53,6 +53,9 @@ class BinaryProtocol:
         self.chunk_size = chunk_size
         self.buffer_timeout = buffer_timeout
         self.on_message = on_message
+        # ADR-014: reassembled content that starts with '(' is an s-expr and
+        # routes here (set by the coordinator to the text-protocol dispatch)
+        self.on_sexpr = None
         self.dedup_window = dedup_window
         self._buffers: Dict[Tuple[int, int], BufferEntry] = {}  # (channelID, sequence) -> BufferEntry
         self._sequence_counters: Dict[int, int] = {}  # channelID -> next sequence number
@@ -136,10 +139,28 @@ class BinaryProtocol:
                 # Mark as processed (for deduplication)
                 self._processed_messages[buffer_key] = time.time()
 
-                # Dispatch to application handler (parse as JSON for RPC)
+                # Dispatch to application handler. Content may be an
+                # S-EXPRESSION (ADR-014: compression is transport, not
+                # format) — sniff exactly like the text path — or legacy JSON
+                if self.on_sexpr:
+                    first = next((b for b in complete_data
+                                  if b not in (0x20, 0x09, 0x0A, 0x0D)), None)
+                    if first == ord("("):
+                        try:
+                            from ..primitives.sexpr import SExpr
+                            expr = SExpr.parse(complete_data.decode("utf-8"))
+                            if expr is not None and expr.head is not None:
+                                logger.info(
+                                    f"Received binary s-expr (ch={channel_id}, "
+                                    f"seq={sequence}, head={expr.head})")
+                                await self.on_sexpr(expr)
+                                return complete_data
+                        except Exception as e:
+                            logger.error(f"Failed to parse binary s-expr: {e}")
+                            return complete_data
                 if self.on_message:
                     try:
-                        # Binary protocol carries JSON-RPC messages (same as text protocol)
+                        # Legacy: binary protocol carrying JSON-RPC messages
                         from ..primitives.json_utils import json_decode_bytes
                         message = json_decode_bytes(complete_data)
                         # Truncate: a full 95KB payload in one log line froze

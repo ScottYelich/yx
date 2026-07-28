@@ -70,6 +70,13 @@ class YXCoordinator:
             buffer_timeout=self.config.protocol.buffer_timeout,
             on_message=message_callback  # Binary protocol also dispatches to RPC
         )
+        # ADR-014: binary-compressed s-expr content dispatches through the
+        # same head-symbol registry as Protocol-0 text s-exprs
+        async def _binary_sexpr(expr):
+            handler = self.text_protocol.sexp_handlers.get(expr.head)
+            if handler:
+                await handler(expr)
+        self.binary_protocol.on_sexpr = _binary_sexpr
 
         # Protocol router
         self.protocol_router = ProtocolRouter()
