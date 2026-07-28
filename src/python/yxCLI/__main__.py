@@ -94,9 +94,18 @@ async def main():
     logger.success("Shutdown complete")
 
 
-if __name__ == "__main__":
+def cli():
+    """Synchronous console-script entry point (pyproject: yxcli).
+
+    main() is async; calling it directly from a console script just creates a
+    coroutine and exits. This wrapper is the awaitable-safe entry.
+    """
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Interrupted")
         sys.exit(0)
+
+
+if __name__ == "__main__":
+    cli()
