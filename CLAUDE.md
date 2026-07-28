@@ -1,6 +1,6 @@
 # CLAUDE.md — yx repo (agent guide)
 
-**This repo is the canonical YX implementation (v2.1.0)** — the production v2.0.0 code
+**This repo is the canonical YX implementation (see VERSION — currently v2.2.1)** — the production v2.0.0 code
 promoted from sdts on 2026-07-19, NOT the YBS rebuild (that lives on branch
 `archive/ybs-rebuild-v1`, tag `pre-v2-import`). Read `README.md` for layout.
 
@@ -17,7 +17,7 @@ implementations with verified live Python↔Swift interop.
   implementation code there.
 - Python venv: `python3.12` (NOT 3.14 — its ensurepip is broken on this box).
   `.venv/bin/pip install -e 'src/python[dev]'`; run tests from `src/python/`.
-- Tests must stay green: 47 Python + 94 Swift. Run both before committing.
+- Tests must stay green: 88 Python + 115 Swift. Run both before committing.
 - Live smoke test: see README quick start. Use explicit IPv4 addresses — `localhost`
   can resolve to ::1 and the sockets are IPv4-only.
 - **Concurrency landmines (both bitten 2026-07-19, see 8f87db1):**
