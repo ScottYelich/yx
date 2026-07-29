@@ -54,7 +54,24 @@ public actor RPCSystem {
                 return
             }
             if let handler = sexpHandlers[head] {
-                await handler(expr)
+                // Application handlers run DETACHED from the intake path.
+                //
+                // Awaiting the handler here blocks the whole receive chain —
+                // `UDPTransport.receiveLoop` awaits `router.route()` awaits
+                // `TextProtocol.ingest()` awaits this — so `recvfrom()` is not
+                // called again until the handler returns. A handler that makes
+                // an RPC call and awaits its `(reply …)` then DEADLOCKS: the
+                // reply is sitting in the socket buffer that only this loop
+                // drains. It looks exactly like "the peer never answered"
+                // (proved live 2026-07-28: bridge replied in 1 ms, Swift timed
+                // out at 5 s, then read the reply once the handler gave up).
+                //
+                // Python has never had this bug — `UDPTransport.datagram_received`
+                // does `asyncio.create_task(self._handle_packet(...))`, one task
+                // per packet. This is the Swift equivalent, and it is the ONLY
+                // place that decouples: protocol framing (Protocol-1 chunk
+                // reassembly) stays serialized on the receive loop.
+                Task { await handler(expr) }
             } else {
                 log("❓ RPCSystem: No S-expr handler for '\(head)' — ignored", level: .debug)
             }
@@ -72,7 +89,9 @@ public actor RPCSystem {
 
             if hasJsonRpc || hasMethod {
                 // Convert [String: JSON] back to [String: Any] for the dispatcher
-                await dispatcher.handle(json: dict.rawValue) { _ in }
+                // Detached for the same reason as the s-expr path above: a
+                // handler must never be able to block the receive loop.
+                Task { await dispatcher.handle(json: dict.rawValue) { _ in } }
                 return
             }
         }
