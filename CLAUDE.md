@@ -46,74 +46,21 @@ implementations with verified live Python↔Swift interop.
   break sdts services — check `sdts/scott/algotrader` usage before renaming public API.
 - Version: bump `VERSION` + `src/python/pyproject.toml` together; tag `vX.Y.Z`.
 
+## Source Boundary — What Belongs HERE
+
+- The canonical YX implementations: Swift (`Sources/`, SPM root) and Python (`src/python/yx`)
+- Protocol specs and wire-format docs (`protocol/`, `docs/`)
+- Interop and unit tests (`tests/`), the `yxCLI` entry points
+- The YBS spec/step harness (top-level `python/`, `swift/` — specs and steps only, never implementation code)
+
+## Source Boundary — What Does NOT Belong Here
+
+| If you need to... | Go to |
+|-------------------|-------|
+| Change trading services built on YX (AlgoTrader, ib-bridge, simulators) | the `sdts` repo (consumes YX via its `deps/yx` submodule) |
+| Build application-level tooling on top of YX | your own consumer repo — YX stays transport + RPC only |
+
 ## Consumers
 
 - **sdts** (`~/workspace/sdts`) — AlgoTrader service mesh + ib-bridge (trading).
   BaseService pattern: heartbeat broadcast to 255.255.255.255:50000, JSON-RPC RPC.
-
----
-
-## 🔧 Tool installation — everything on PATH via `~/ai/bin`
-
-**All command-line tools from every project are reachable from `~/ai/bin`,** which
-is on PATH. One location, no per-project PATH juggling, no `cd` to run a CLI.
-
-### Symlink, do not copy
-
-```sh
-ln -sfn "$REPO/bin/mytool" ~/ai/bin/mytool     # correct
-cp "$REPO/bin/mytool" ~/ai/bin/mytool          # goes stale silently
-```
-
-A copy is a snapshot: edit the source and the deployed tool keeps running the
-old code, which is invisible until it produces a wrong answer. A symlink cannot
-drift.
-
-**Exception — compiled Swift binaries must be copied, then re-signed:**
-```sh
-cp .build/release/mytool ~/ai/bin/mytool
-codesign -s - --force ~/ai/bin/mytool          # REQUIRED, or macOS kills it
-```
-Without the re-sign the binary dies at launch with `zsh: killed` and no useful
-error.
-
-### Entry points must be location-independent
-
-A tool reached through a symlink sees the SYMLINK in `__file__`, so anything
-deriving its project root from `__file__` computes the wrong path and fails on
-import. Resolve first:
-
-```python
-_real = os.path.realpath(__file__)          # not abspath -- realpath
-```
-
-### Python tools must pin their own interpreter
-
-`#!/usr/bin/env python3` resolves to whatever is first on PATH — on this machine
-Homebrew's, which has none of any project's dependencies. Every Python entry
-point re-execs into its own project venv:
-
-```python
-_real = os.path.realpath(__file__)
-_venv = os.path.join(os.path.dirname(os.path.dirname(_real)), ".venv", "bin", "python3")
-if os.path.exists(_venv) and (
-        os.path.realpath(sys.executable) != os.path.realpath(_venv)
-        or os.path.abspath(__file__) != _real):
-    os.execv(_venv, [_venv, _real] + sys.argv[1:])
-```
-
-Idempotent, self-healing, and harmless if the venv is already active.
-
-**Interpreters are project venvs (`<repo>/.venv`), never pyenv.** The old
-`~/.pyenv/versions/yx-dev` convention is retired and that environment no longer
-exists; entry points relying on it failed with `ModuleNotFoundError:
-cryptography` before they could report anything useful. Each repo pins its
-dependencies in `requirements.txt`.
-
-### Checklist for a new tool
-
-- [ ] symlinked into `~/ai/bin` (or copied + `codesign` if a Swift binary)
-- [ ] runs from any working directory
-- [ ] runs with a clean PATH (`env -i`)
-- [ ] resolves `__file__` through symlinks
-- [ ] re-execs into its project venv, if Python
