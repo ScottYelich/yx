@@ -132,8 +132,8 @@ Success = 100% pass rate")
     (code "Transport: 2² × 5 = 20 tests
 Text Protocol: 2² × 3 = 12 tests
 Binary Protocol: 2² × 4 = 16 tests
-Total tests = 48 tests
-Success = 48/48 passing"))
+Total tests = 52 tests
+Success = 52/52 passing"))
   (section
     (heading "Failure Handling")
     (para "If ANY interop test fails:")
@@ -317,7 +317,7 @@ Transport Layer:  20/20 passed ✅
 Text Protocol:    12/12 passed ✅
 Binary Protocol:  16/16 passed ✅
 ----------------------------------------
-Total:            48/48 passed ✅
+Total:            52/52 passed ✅
 ========================================
 ✅ ALL INTEROPERABILITY TESTS PASSED
 Exit code: 0"))
@@ -351,11 +351,19 @@ Exit code: 0"))
       (item "2. **Compressed message** - Send/receive ZLIB-compressed data")
       (item "3. **Encrypted message** - Send/receive AES-256-GCM encrypted data")
       (item "4. **Compressed + encrypted** - Send/receive data with both features")
+      (item "5. **Compressed + encrypted MULTI-CHUNK** - the same, with a payload that SPANS SEVERAL PACKETS **after compression**")
       (para "**Verification:**")
       (item "Binary data preserved exactly (byte-identical)")
       (item "Compression/decompression works correctly")
       (item "Encryption/decryption works correctly")
       (item "Combined compression + encryption works correctly")
+      (item "Chunking and reassembly work on the COMBINED path, and the packet count is ASSERTED (not merely printed)")
+      (para "**Why scenario 5 is separate and mandatory (added 2026-08-02, from a real gap):**")
+      (para "sdts ran scenario 4 with `\"COMPRESSED_ENCRYPTED_PAYLOAD\" x100` — 2,969 bytes of pure repetition. zlib crushed it to 241 bytes, a 12x shrink, so it fitted in ONE packet. The suite reported 4/4 for months and had NEVER exercised chunking on the most complex path in the protocol: compress -> encrypt -> CHUNK -> reassemble -> decrypt -> decompress. An ordering bug there was invisible.")
+      (para "A payload big enough to chunk BEFORE compression is not sufficient — compression happens first, so the requirement is on the COMPRESSED size. Two payload shapes are required because they prove different things:")
+      (item "**Incompressible** (e.g. a hash chain, hex-encoded): chunking must happen even when compression cannot help. The packet count has an information-theoretic FLOOR that no better compressor can defeat.")
+      (item "**Highly compressible but large** (e.g. indexed repeating blocks): still several packets AFTER compression, which proves the ORDERING. Note that PURE repetition compresses ~400x and will collapse to one packet — index the blocks.")
+      (para "**The count MUST be asserted, and a MISSING count MUST fail.** The failure mode here was silent adequacy: a green test that had quietly stopped testing what it claimed. An assertion that can be absent is an assertion that can rot.")
       (para "**Example Test:**")
       (code "def test_binary_protocol_swift_to_python():
     python_receiver = start_python_binary_receiver(port=7778)
@@ -372,15 +380,15 @@ Exit code: 0"))
       (para "**Text Protocol (Protocol 0):**")
       (item "N² combinations × 3 scenarios = N² × 3 tests")
       (para "**Binary Protocol (Protocol 1):**")
-      (item "N² combinations × 4 scenarios = N² × 4 tests")
+      (item "N² combinations × 5 scenarios = N² × 5 tests")
       (para "**Total:**")
-      (item "N² × (5 + 3 + 4) = N² × 12 tests")
+      (item "N² × (5 + 3 + 5) = N² × 13 tests")
       (para "**For Python + Swift (N=2):**")
       (item "Transport: 4 × 5 = 20 tests")
       (item "Text Protocol: 4 × 3 = 12 tests")
-      (item "Binary Protocol: 4 × 4 = 16 tests")
-      (item "**Total: 48 tests**")
-      (para "**All 48 tests MUST pass for system to be considered complete.**")))
+      (item "Binary Protocol: 4 × 5 = 20 tests")
+      (item "**Total: 52 tests**")
+      (para "**All 52 tests MUST pass for system to be considered complete.**")))
   (section
     (heading "Build System Integration")
     (subsection
@@ -392,8 +400,8 @@ Exit code: 0"))
       (item "Step 11 (after Step 10): Run full interop test suite")
       (para "**Step 11 Title:** \"Cross-Language Interoperability Validation\"")
       (para "**Step 11 Success Criteria:**")
-      (item "All N² × 12 tests pass (transport + text + binary protocols)")
-      (item "For Python + Swift: 48/48 tests pass")
+      (item "All N² × 13 tests pass (transport + text + binary protocols)")
+      (item "For Python + Swift: 52/52 tests pass")
       (item "Clear reporting of which combinations tested")
       (item "All 3 test layers pass (transport, text protocol, binary protocol)")
       (item "No skipped tests")

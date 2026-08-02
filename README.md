@@ -25,7 +25,7 @@ protocol/specs/                   language-agnostic specs; v2 spec + v1->v2 migr
                                   in technical/
 python/, swift/                   YBS build-steps harness (spec-driven rebuild track)
 canonical/test-vectors/           v1-era wire vectors (Protocol 0 still valid)
-tests/interop-v1-legacy/          v1 48-test matrix (needs v2 framing adaptation)
+tests/interop-v1-legacy/          v1 52-test matrix (needs v2 framing adaptation)
 ```
 
 ## Quick start
@@ -82,8 +82,17 @@ See `docs/yx.sxp` for the executive summary and `BUILD_STATUS.sxp` for current s
 ## Known follow-ups
 
 - Message-bus reliability layer (ack/retry/dedup) — not built yet; UDP is best-effort.
-- Adapt the 48-test interop matrix to v2 framing (`tests/interop-v1-legacy/`) —
+- Adapt the 52-test interop matrix to v2 framing (`tests/interop-v1-legacy/`) —
   until then, interop is proven via live cross-language node tests + the unit suites.
+- The consumer-side suite in **sdts** (`tests/yx-interop/`) runs 28/28 against
+  this framework: Protocol 0 and 1 in all four language directions, protoOpts
+  0x00/0x01/0x02/0x03, and **0x03 MULTI-CHUNK** (added 2026-08-02 after that path
+  was found to have never chunked — a 12x-compressible payload fitted in one
+  packet). Packet counts are asserted there; see
+  `protocol/specs/testing/interoperability-requirements.sxp` scenario 5.
+- **All of it runs on macOS only.** Swift YX is Darwin-locked (`CryptoKit`,
+  `Compression`, `Darwin.socket`, zero `#if os()` guards); the Python
+  implementation is portable by dependency. A Linux build is UNVERIFIED.
 - Bonjour/mDNS discovery (ADR D10) — designed-for, not implemented; broadcast only.
 - Mesh-key distribution is manual (per-node Keychain via `yxkey`).
 - `yxcli` console-script entry point calls async main without asyncio.run (use

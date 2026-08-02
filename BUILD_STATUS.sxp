@@ -16,11 +16,11 @@
       (row "Suite" "Count" "Status")
       (row "Swift (`swift test`)" "94" "passing")
       (row "Python (`pytest`, `src/python/tests/`)" "47" "passing"))
-    (para "Interop: proven via live cross-language node tests + the unit suites. The older line's formal 48-test interop matrix has **not** been re-run against v2 framing (`tests/interop-v1-legacy/`)."))
+    (para "Interop: proven via live cross-language node tests + the unit suites. The older line's formal 52-test interop matrix has **not** been re-run against v2 framing (`tests/interop-v1-legacy/`). The sdts consumer suite (`tests/yx-interop/`) does run 28/28 against v2, including 0x03 MULTI-CHUNK with asserted packet counts (added 2026-08-02) — on macOS only; a Linux build of Swift YX is UNVERIFIED and currently impossible without porting CryptoKit/Compression/Darwin sockets."))
   (section
     (heading "Next / not done")
     (item "**Message-bus reliability layer** — ack/retry/dedup on top of best-effort UDP.")
-    (item "**Re-run the formal 48-test interop matrix** adapted to v2 framing.")
+    (item "**Re-run the formal 52-test interop matrix** adapted to v2 framing (now 13 scenarios/combination — scenario 5 is 0x03 MULTI-CHUNK).")
     (item "**Bonjour/mDNS discovery** (ADR D10) — designed-for; broadcast only today.")
     (item "**`msg` client CLI** — send messages into the mesh without running a node.")
     (item "**laniakea launchd deploy** — stand yxnode up as a supervised service (laniakea `svc`).")
