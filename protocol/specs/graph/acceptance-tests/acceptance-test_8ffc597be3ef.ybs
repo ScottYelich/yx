@@ -1,0 +1,7 @@
+(acceptance-test (id "8ffc597be3ef") (version "1.0.0") (status 'implemented)
+  (for     "dd25da0af67d")
+  (title   "Only a listed signer carries authority")
+  (level   'integration)
+  (given   "a trusted-signers store on disk")
+  (when    "a signed command arrives from a key that is present, and then from one that is absent")
+  (expect  "the present signer's command is accepted and the absent signer's is refused — presence in the store is what confers authority, not possession of a valid signature"))
