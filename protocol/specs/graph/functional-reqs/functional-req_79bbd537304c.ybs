@@ -1,0 +1,10 @@
+(functional-req (id "79bbd537304c") (version "1.0.0") (status 'implemented)
+  (for      "d93037cecb98")
+  (title    "Signed authority ships as building, tested code")
+  (priority 'high)
+  (description
+    "The signed-authority implementation shall build clean and pass its full
+     test suite in the shipped package. This exists so that the suite-level
+     acceptance test has a requirement to attach to: the graph model links an
+     acceptance-test to a functional-req, never directly to a feature, because
+     a test with no requirement behind it asserts nothing in particular."))

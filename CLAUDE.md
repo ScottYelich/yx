@@ -46,6 +46,20 @@ implementations with verified live Python↔Swift interop.
   break sdts services — check `sdts/scott/algotrader` usage before renaming public API.
 - Version: bump `VERSION` + `src/python/pyproject.toml` together; tag `vX.Y.Z`.
 
+## Source Boundary — What Belongs HERE
+
+- The canonical YX implementations: Swift (`Sources/`, SPM root) and Python (`src/python/yx`)
+- Protocol specs and wire-format docs (`protocol/`, `docs/`)
+- Interop and unit tests (`tests/`), the `yxCLI` entry points
+- The YBS spec/step harness (top-level `python/`, `swift/` — specs and steps only, never implementation code)
+
+## Source Boundary — What Does NOT Belong Here
+
+| If you need to... | Go to |
+|-------------------|-------|
+| Change trading services built on YX (AlgoTrader, ib-bridge, simulators) | the `sdts` repo (consumes YX via its `deps/yx` submodule) |
+| Build application-level tooling on top of YX | your own consumer repo — YX stays transport + RPC only |
+
 ## Consumers
 
 - **sdts** (`~/workspace/sdts`) — AlgoTrader service mesh + ib-bridge (trading).
