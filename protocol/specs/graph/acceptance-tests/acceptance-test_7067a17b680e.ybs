@@ -1,0 +1,7 @@
+(acceptance-test (id "7067a17b680e") (version "1.0.0") (status 'implemented)
+  (for     "94e7cc82a9b2")
+  (title   "A detached signature verifies, and a tampered one does not")
+  (level   'integration)
+  (given   "an Ed25519 keypair with the private key in the Keychain")
+  (when    "canonical bytes are signed and the detached ed25519:<b64> signature is verified against the public key")
+  (expect  "verification succeeds for the original bytes and FAILS for any altered byte or mismatched key"))
