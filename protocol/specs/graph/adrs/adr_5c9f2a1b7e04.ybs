@@ -1,0 +1,38 @@
+(adr (id "5c9f2a1b7e04") (version "1.0.0") (status 'approved) (for "d93037cecb98")
+  (title "D13: A node is (user, machine); the spool is ~/.yx, never /var/spool")
+  (decision
+    "Each USER runs their own yxnode with its own port, identity and spool.
+     There is no machine-scope node and no shared writable directory. State
+     lives in ~/.yx/ by default, honouring XDG_STATE_HOME and XDG_CONFIG_HOME
+     when they are set. YX_HOME overrides everything.")
+  (rationale
+    "/var/spool is root:wheel 755 -- measured on colossus, not assumed -- so an
+     unprivileged user cannot participate there without one of three classic
+     hacks: a 1777 drop directory, a setgid helper like crontab(1), or a root
+     daemon writing into user homes. Each has been a privilege-escalation bug
+     somewhere. Per-user nodes DISSOLVE the problem instead of mediating it:
+     nothing a user needs sits outside their own home, so no privilege boundary
+     is crossed and there is none to get wrong.
+
+     Precedent is D-Bus, which runs a system bus and a per-user session bus
+     side by side, and systemd --user. ~/.config already has six tenants on this
+     box including `agent`, so the pattern is in use here already.
+
+     A machine-scope node remains possible later as a system service account --
+     but it is then just another peer with its own UUID, not a privileged tier.
+
+     NOT under ~/ai: that is a deploy target for the LLM stack, and yx is not
+     part of it -- the category error would bite the first time yx carries
+     something with no AI in it. NOT under ~/stuff: that is durable backed-up
+     work product, and a spool is runtime state that must be safely deletable.
+
+     ~/.yx over ~/yx because the home dir convention here is that ~ holds only
+     symlinks into ~/stuff; a visible directory violates it where a dotfile is
+     the accepted exception for tool state.
+
+     Bloat is not a real objection: messages measured at 312 bytes average, and
+     sweep already GCs done/ and dead/ at 14 days. ARTIFACTS are the actual
+     risk -- a video summary is 2 MB, an image catalogue can be gigabytes -- and
+     they MUST NOT live in the spool. A result message carries a path; the bytes
+     stay wherever the capability wrote them.")
+  (source "laniakea/docs/contract-net.md#spool"))

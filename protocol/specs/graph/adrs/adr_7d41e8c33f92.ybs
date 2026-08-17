@@ -1,0 +1,37 @@
+(adr (id "7d41e8c33f92") (version "1.0.0") (status 'approved) (for "d93037cecb98")
+  (title "D14: Addresses name a MAILBOX, not a process; UUID required, alias local")
+  (decision
+    "An address is machine/user/entity, resolving to two routing-relevant parts:
+     the NODE (machine+user -- what has a port and a spool) and the ENTITY (a
+     named mailbox within that node's spool). The wire carries a UUID and the
+     alias as a hint; the UUID decides. Aliases are LOCAL, ~/.ssh/config style,
+     never announced into a shared namespace. Bindings form on first contact --
+     TOFU is the chosen model and a CA is deferred, consistent with D12's
+     no-PKI position.")
+  (rationale
+    "An entity is a MAILBOX, not a process, and the distinction is the whole
+     point. `operator` is a human. `claude` may be several concurrent sessions.
+     A long-running agent that restarts keeps its identity because the UUID
+     persists in identity.sxp. Addressing a process id would mean every restart
+     silently orphans mail, which is the failure a durable queue exists to
+     prevent. Mail is therefore PEEKED, not consumed -- several readers may
+     share one mailbox and a message that vanishes because something glanced at
+     it is a message that got lost.
+
+     A user is a security PRINCIPAL, not an instance: it owns the node, decides
+     the spool location and sets the file permissions. That is why it sits in
+     the node half of the address rather than the entity half.
+
+     Instance-level targeting is available by giving an instance its own UUID,
+     but it is usually the wrong choice for exactly the restart reason above.
+
+     THE SAFETY PROPERTY that falls out: yxworker claims only <node>/yxworker.
+     Anything addressed to another entity, or to a bare node (operator mail),
+     is left untouched -- so adding an entity can never cause the automated
+     dispatcher to swallow its messages, and nothing executes merely because a
+     message arrived.
+
+     UUID not GUID: same 128-bit value, but Microsoft's binary layout is
+     mixed-endian where RFC 4122 is big-endian. Irrelevant while addresses are
+     strings in s-expr; it matters the moment anything goes binary.")
+  (source "laniakea/docs/contract-net.md#identity"))
