@@ -117,7 +117,14 @@ public enum SExpr: Sendable, Equatable {
         var s = String(chars[i]); i += 1
         while i < chars.count {
             let c = chars[i]
-            guard c.isASCII, c.isLetter || c.isNumber || c == "." || c == "_" || c == "-" else { break }
+            // "/" and ":" are legal symbol characters in every Lisp worth the
+            // name, and real payloads are full of them -- "laptop/general",
+            // "http://…", "12:30". Rejecting them made a peer's message
+            // unparseable rather than merely ugly. Readers are tolerant; the
+            // writer stays conservative.
+            guard c.isASCII, c.isLetter || c.isNumber
+                    || c == "." || c == "_" || c == "-" || c == "/" || c == ":"
+            else { break }
             s.append(c); i += 1
         }
         return .sym(s)

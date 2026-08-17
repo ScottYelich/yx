@@ -206,9 +206,30 @@ await yx.registerSexp("node-info") { _ in
 }
 
 // msg — inbound agent message → spool verbatim as .sxp if addressed to a local agent.
+/// Recipient aliases from either wire form.
+///
+///   legacy      (to "colossus/aiwork")
+///   current     (to (uuid "…") (alias "colossus/aiwork"))
+///
+/// The old code read only `stringValue`, which is nil for the structured form —
+/// so `to` became [""], localHit was false, and the message was SILENTLY
+/// DROPPED. `goal send` already emits the structured form, so every goal that
+/// ever crossed the wire would have been discarded without a line of output.
+func recipients(_ expr: SExpr) -> [String] {
+    guard let to = expr.field("to") else { return [] }
+    if let s = to.stringValue {                       // legacy: (to "a,b")
+        return s.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+    // Structured: pull the alias for routing. The UUID is what the RECEIVER
+    // verifies (goal inbox does that); this only decides "is it for this box".
+    var out: [String] = []
+    if let alias = to.field("alias")?.stringValue { out.append(alias) }
+    if let uuid = to.field("uuid")?.stringValue { out.append(uuid) }
+    return out
+}
+
 await yx.registerSexp("msg") { expr in
-    let to = (expr.field("to")?.stringValue ?? "")
-        .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+    let to = recipients(expr)
     let localHit = to.contains("@all") || to.contains { t in
         agents.contains(t) || t == nodeID || t.hasPrefix("\(nodeID)/")
     }
@@ -231,10 +252,83 @@ await yx.registerSexp("msg") { expr in
         return
     }
 
-    let givenID = expr.field("id")?.stringValue ?? ""
+    let givenID = expr.field("id").flatMap { $0.stringValue ?? $0.symValue } ?? ""
     let id = givenID.isEmpty ? unfID() : givenID
     if let path = writeSxp(id: id, raw: expr.serialize()) {
         p("📥 delivered → \(path)")
+    }
+}
+
+// (goal …) is the Contract Net verb. It crosses the wire exactly like (msg …)
+// and lands in the same Maildir; goal/yxworker read both from new/.
+await yx.registerSexp("goal") { expr in
+    let to = recipients(expr)
+    let localHit = to.contains("@all") || to.contains { t in
+        agents.contains(t) || t == nodeID || t.hasPrefix("\(nodeID)/")
+    }
+    guard localHit else { return }
+    // stringValue is nil for a SYMBOL, and ids go on the wire bare
+    // (g-sndr-…), so this used to fall back to a fresh unfID() every time --
+    // silently defeating the dedup the filename is supposed to provide.
+    let givenID = expr.field("id").flatMap { $0.stringValue ?? $0.symValue } ?? ""
+    let id = givenID.isEmpty ? unfID() : givenID
+    if let path = writeSxp(id: id, raw: expr.serialize()) {
+        p("📥 goal delivered → \(path)")
+    }
+}
+
+// MARK: - Outbound drain
+//
+// `goal send --to laptop/general` on colossus wrote
+// ~/.yx/spool/laptop/new/ ON COLOSSUS — a directory the laptop never reads.
+// Three real goals sat there as dead letters. A spool named for a node that is
+// not us is an OUTBOUND queue, so drain it: ship each entry to every peer and
+// retire it locally. Receivers filter by localHit, which is how a peer that is
+// not the addressee ignores it.
+//
+// Retire on send rather than on acknowledgement: yx is fire-and-forget UDP, so
+// there is no ack to wait for. Re-shipping forever would be worse than a lost
+// message — the dedup log on the receiver is what makes a resend safe, and
+// that belongs to a later change.
+func drainOutbound() async {
+    let root = yxState() + "/spool"
+    let fm = FileManager.default
+    guard let nodes = try? fm.contentsOfDirectory(atPath: root) else { return }
+    for n in nodes where n != nodeID {
+        let newDir = "\(root)/\(n)/new"
+        guard let files = try? fm.contentsOfDirectory(atPath: newDir) else { continue }
+        for f in files where f.hasSuffix(".sxp") {
+            let src = "\(newDir)/\(f)"
+            // BE LOUD. A silent `continue` here is how an undeliverable message
+            // becomes invisible -- the same failure mode as the silent hook and
+            // the two-spool split. If we cannot ship it, say why and quarantine
+            // it so it stops being retried and starts being noticed.
+            guard let raw = try? String(contentsOfFile: src, encoding: .utf8) else {
+                p("⚠️  outbound unreadable, skipping: \(f)")
+                continue
+            }
+            guard let expr = SExpr.parse(raw) else {
+                p("❌ outbound UNPARSEABLE → dead/: \(f)")
+                let deadDir = "\(root)/\(n)/dead"
+                try? fm.createDirectory(atPath: deadDir, withIntermediateDirectories: true)
+                try? fm.moveItem(atPath: src, toPath: "\(deadDir)/\(f)")
+                continue
+            }
+            for peer in peers { await yx.sendSexpr(expr, to: peer.host, port: peer.port) }
+            let sentDir = "\(root)/\(n)/cur"
+            try? fm.createDirectory(atPath: sentDir, withIntermediateDirectories: true)
+            try? fm.moveItem(atPath: src, toPath: "\(sentDir)/\(f)")
+            p("📤 outbound → \(n) via \(peers.count) peer(s): \(f)")
+        }
+    }
+}
+
+if !peers.isEmpty {
+    Task {
+        while true {
+            await drainOutbound()
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+        }
     }
 }
 
