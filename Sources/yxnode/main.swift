@@ -165,6 +165,23 @@ func writeSxp(id: String, raw: String) -> String? {
 func p(_ s: String) { print(s); fflush(stdout) }
 
 p("🧩 yxnode '\(nodeID)' agents=\(agents) port=\(port) mesh=\(mesh) key=\(keySource.rawValue)")
+// PUBLISH the node name so readers cannot derive a different one. yxnode
+// takes --node and defaults to the hostname; _meshlib defaulted to the
+// hostname only. Where those coincide (colossus) the disagreement is
+// invisible; on the laptop `--node laptop` spooled to ~/.yx/spool/laptop
+// while goal read ~/.yx/spool/sdy-mbp-m4pro-1 and saw an empty mesh. This is
+// the second spool bug of exactly that shape, so the writer now states the
+// name and readers consume it -- agreement by construction, not convention.
+do {
+    let stateDir = yxState()
+    try FileManager.default.createDirectory(atPath: stateDir,
+                                            withIntermediateDirectories: true)
+    try (nodeID + "\n").write(toFile: stateDir + "/node",
+                              atomically: true, encoding: .utf8)
+} catch {
+    FileHandle.standardError.write(Data("⚠️  could not publish node name: \(error)\n".utf8))
+}
+
 p("📬 spool: \(spoolDir)")
 p("🔏 trusted signers: \(trustedSigners.count) (\(trustedPath))")
 
