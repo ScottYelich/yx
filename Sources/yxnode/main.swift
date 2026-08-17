@@ -49,8 +49,26 @@ let port       = arg("--port").flatMap { UInt16($0) } ?? 9720
 let mesh       = arg("--mesh") ?? "agents"
 let heartbeat  = arg("--heartbeat").flatMap { Double($0) } ?? 5.0
 let agents     = (arg("--agents") ?? "\(nodeID)/claude").split(separator: ",").map(String.init)
+/// State root, ADR D13: ~/.yx (NOT ~/ai — that is the LLM stack's deploy
+/// target). YX_HOME wins, then XDG_STATE_HOME, then ~/.yx. Must resolve
+/// identically to _meshlib._yx_dirs() or the reader and the writer disagree,
+/// which is exactly the two-spool split this replaced.
+func yxState() -> String {
+    let env = ProcessInfo.processInfo.environment
+    if let h = env["YX_HOME"], !h.isEmpty { return (h as NSString).expandingTildeInPath }
+    if let s = env["XDG_STATE_HOME"], !s.isEmpty {
+        return (s as NSString).expandingTildeInPath + "/yx"
+    }
+    return NSHomeDirectory() + "/.yx"
+}
+
+// Per-node Maildir, matching _meshlib.spool(): <state>/spool/<node>/{tmp,new,…}.
+// The YYYY/MM sharding this replaced also broke launchd WatchPaths — creating a
+// file two levels down does not modify the watched directory's mtime.
 let spoolDir   = arg("--spool").map { ($0 as NSString).expandingTildeInPath }
-                    ?? (NSHomeDirectory() + "/ai/mail")
+                    ?? (ProcessInfo.processInfo.environment["YX_SPOOL"]
+                        .map { ($0 as NSString).expandingTildeInPath + "/\(nodeID)" }
+                        ?? yxState() + "/spool/\(nodeID)")
 let broadcast  = arg("--broadcast")            // e.g. 192.168.1.255 (LAN) — optional
 let shutdownAfter = arg("--shutdown-after").flatMap { Double($0) }
 let peers: [(host: String, port: UInt16)] = (arg("--peers") ?? "")
@@ -96,17 +114,46 @@ func unfID(_ date: Date = Date()) -> String {
     return String(format: "%@%06d", f.string(from: date), usec)
 }
 
-/// Spool one received (msg …) verbatim as ~/ai/mail/YYYY/MM/<id>.sxp.
-/// Returns the path, or nil on failure. (message-format.md §Storage: never UNF/YAML.)
+/// A filename derived from a PEER-SUPPLIED id. Never trust the id itself: this
+/// used to interpolate it straight into a path, so `(id "../../../../tmp/x")`
+/// escaped the spool and the atomic write silently replaced whatever was there.
+/// Mirrors _meshlib.safe_name() — the two must agree or one side accepts names
+/// the other rejects.
+func safeName(_ s: String) -> String {
+    let ok = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+    let cleaned = String(String(s.map { ok.contains($0) ? $0 : "_" }).prefix(120))
+    // An all-dots name is still a directory reference; the charset filter alone
+    // passes "." and ".." because "." is a legal filename character.
+    if cleaned.isEmpty || cleaned.allSatisfy({ $0 == "." }) {
+        return String(SHA256.hash(data: Data(s.utf8))
+            .map { String(format: "%02x", $0) }.joined().prefix(16))
+    }
+    return cleaned
+}
+
+/// Spool one received (msg …) verbatim as <spool>/new/<id>.sxp, Maildir-style.
+///
+/// Written into tmp/ and made visible by RENAME into new/, so a file appearing
+/// there is necessarily complete — a reader can never see a half-written
+/// message. Foundation's `atomically: true` is not sufficient: it stages the
+/// temp file in the SAME directory, so a watcher on new/ sees the staging file.
+/// (message-format.md §Storage: never UNF/YAML.)
 @discardableResult
 func writeSxp(id: String, raw: String) -> String? {
-    let f = DateFormatter(); f.dateFormat = "yyyy/MM"; f.timeZone = TimeZone.current
-    let dir = "\(spoolDir)/\(f.string(from: Date()))"
+    let name = safeName(id) + ".sxp"
+    let fm = FileManager.default
     do {
-        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        let path = "\(dir)/\(id).sxp"
-        try raw.write(toFile: path, atomically: true, encoding: .utf8)
-        return path
+        for sub in ["tmp", "new", "cur", "done", "dead"] {
+            try fm.createDirectory(atPath: "\(spoolDir)/\(sub)",
+                                   withIntermediateDirectories: true)
+        }
+        let tmp = "\(spoolDir)/tmp/\(name)"
+        let dst = "\(spoolDir)/new/\(name)"
+        try raw.write(toFile: tmp, atomically: false, encoding: .utf8)
+        // Same filesystem, so this is an atomic rename(2).
+        if fm.fileExists(atPath: dst) { try? fm.removeItem(atPath: tmp); return dst }
+        try fm.moveItem(atPath: tmp, toPath: dst)
+        return dst
     } catch {
         FileHandle.standardError.write(Data("❌ spool write failed: \(error)\n".utf8))
         return nil
